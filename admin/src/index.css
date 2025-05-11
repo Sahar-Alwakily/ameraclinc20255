@@ -1,0 +1,19 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*{
+    font-family: Outfit;
+}
+
+::-webkit-scrollbar{
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+      top: 4rem; /* يتناسب مع ارتفاع الـ Navbar (h-16 = 4rem) */
+      height: calc(100vh - 4rem); /* ليملأ المساحة المتبقية */
+    }
+  }

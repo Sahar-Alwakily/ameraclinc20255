@@ -1,0 +1,33 @@
+/* تكييف الإشعارات للغة العربية */
+.Toastify__toast-body {
+    font-family: 'Tajawal', sans-serif;
+    direction: rtl;
+    text-align: right;
+  }
+  
+  /* تحسين عرض الجدول على الجوال */
+  @media (max-width: 640px) {
+    table {
+      min-width: 600px;
+    }
+    
+    .stat-card {
+      min-width: 200px;
+    }
+  }
+
+  .Toastify__toast-body {
+    font-family: 'Tajawal', sans-serif;
+    direction: rtl;
+    text-align: right;
+  }
+  
+  @media (max-width: 640px) {
+    table {
+      min-width: 600px;
+    }
+    
+    .stat-card {
+      min-width: 200px;
+    }
+  }
