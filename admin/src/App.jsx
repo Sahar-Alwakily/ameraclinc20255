@@ -64,7 +64,16 @@ const App = () => {
                 )
               }
             />
-
+            <Route
+              path="/"
+              element={
+                !isAuthenticated ? (
+                  <Login setIsAuthenticated={setIsAuthenticated} />
+                ) : (
+                  <Navigate to="/admin-dashboard" replace />
+                )
+              }
+            />
             <Route
               path="/admin-dashboard"
               element={
