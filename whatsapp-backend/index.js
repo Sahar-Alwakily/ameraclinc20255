@@ -56,7 +56,8 @@ const database = getDatabase(firebaseApp); // التعديل هنا
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5174',
-  'https://ameraaclinic.com'
+  'https://ameraaclinic.com',
+  'https://www.api.ameraclinic.com',
 ];
 
 app.use(cors({

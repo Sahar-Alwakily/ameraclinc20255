@@ -97,7 +97,7 @@ const Appointment = () => {
     fetchData();
   }, []);
   const apiUrl = import.meta.env.PROD 
-  ? 'https://us-central1-ameraclinic-326b2.cloudfunctions.net/api' 
+  ? 'https://www.api.ameraclinic.com' 
   : 'http://localhost:5000';
 
 
