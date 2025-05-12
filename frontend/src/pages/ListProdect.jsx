@@ -6,12 +6,12 @@ import { Dialog, Transition } from '@headlessui/react';
 import { useNavigate } from 'react-router-dom';
 
 const ListProduct = () => {
-    const categories = [
-        { value: "all", label: "الكل" },
-        { value: "Skin care", label: "عناية البشرة" },
-        { value: "Hair care", label: "عناية الشعر" },
-        { value: "Body care", label: "عناية الجسم" }
-    ];
+const categories = [
+  { value: "all", label: "الكل" },
+  { value: "Skin care", label: "عناية البشرة" }, // ← هنا
+  { value: "Hair care", label: "عناية الشعر" },  // ← هنا
+  { value: "Body care", label: "عناية الجسم" }    // ← هنا
+];
     
     const { addToCart } = useContext(AppContext);
     const navigate = useNavigate();
@@ -45,24 +45,26 @@ const ListProduct = () => {
         return () => unsubscribe();
     }, []);
 
-    const handleCategoryChange = (categoryValue) => {
-        if (categoryValue === "all") {
-            setSelectedCategories([]);
-        } else {
-            setSelectedCategories(prev =>
-                prev.includes(categoryValue)
-                    ? prev.filter(c => c !== categoryValue)
-                    : [...prev, categoryValue]
-            );
-        }
-    };
+const handleCategoryChange = (categoryValue) => {
+  if (categoryValue === "all") {
+    setSelectedCategories([]);
+  } else {
+    setSelectedCategories(prev =>
+      prev.includes(categoryValue)
+        ? prev.filter(c => c !== categoryValue)
+        : [...prev, categoryValue]
+    );
+  }
+};
 
-    const filteredProducts = products.filter(product => {
-        const matchesCategory = selectedCategories.length === 0 || 
-                            selectedCategories.some(cat => product.catalog?.toLowerCase().includes(cat));
-        const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchesCategory && matchesSearch;
-    });
+const filteredProducts = products.filter(product => {
+  const matchesCategory = selectedCategories.length === 0 || 
+                        selectedCategories.some(cat => 
+                          product.catalog?.toLowerCase().includes(cat.toLowerCase()) // ← هنا
+                        );
+  const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
+  return matchesCategory && matchesSearch;
+});
 
     const openProductDetails = (product) => {
         setSelectedProduct(product);
@@ -97,18 +99,17 @@ const ListProduct = () => {
             <div className='flex flex-col md:flex-row-reverse gap-4 items-center mb-8'>
                 <div className='flex gap-2 sm:gap-4 flex-wrap justify-center'>
                     {categories.map((category) => (
-                        <button
-                            key={category.value}
-                            onClick={() => handleCategoryChange(category.value)}
-                            className={`p-2 px-3 sm:px-4 text-xs sm:text-sm rounded-full transition-all ${
-                                (selectedCategories.length === 0 && category.value === "all") || 
-                                selectedCategories.includes(category.value)
-                                    ? 'bg-pink-500 text-white'
-                                    : 'bg-gray-200 text-gray-700 hover:bg-pink-100'
-                            }`}
-                        >
-                            {category.label}
-                        </button>
+<button
+  key={category.value}
+  onClick={() => handleCategoryChange(category.value)}
+  className={`p-2 px-3 sm:px-4 text-xs sm:text-sm rounded-full transition-all ${
+    selectedCategories.includes(category.value) // ← هنا
+      ? 'bg-pink-500 text-white'
+      : 'bg-gray-200 text-gray-700 hover:bg-pink-100'
+  }`}
+>
+  {category.label}
+</button>
                     ))}
                 </div>
 
