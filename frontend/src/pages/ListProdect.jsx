@@ -8,9 +8,9 @@ import { useNavigate } from 'react-router-dom';
 const ListProduct = () => {
     const categories = [
         { value: "all", label: "الكل" },
-        { value: "Skincare", label: "عناية البشرة" },
-        { value: "Haircare", label: "عناية الشعر" },
-        { value: "Bodycare", label: "عناية الجسم" }
+        { value: "Skin care", label: "عناية البشرة" },
+        { value: "Hair care", label: "عناية الشعر" },
+        { value: "Body care", label: "عناية الجسم" }
     ];
     
     const { addToCart } = useContext(AppContext);
