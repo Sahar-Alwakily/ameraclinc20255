@@ -1,12 +1,15 @@
 import React, { useState, useRef } from 'react';
 import axios from 'axios';
+import { toast } from 'react-toastify'; // أضف هذا الاستيراد
 
 const EditProductModal = ({ product, onClose, onSave }) => {
     const [editedProduct, setEditedProduct] = useState({ ...product });
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef(null);
-    const cloudinaryUploadPreset = 'your_upload_preset'; // استبدل بالقيمة الصحيحة
-    const cloudinaryCloudName = 'your_cloud_name'; // استبدل بالقيمة الصحيحة
+    
+    // استبدل هذه القيم بإعداداتك من Cloudinary
+    const cloudinaryUploadPreset = 'ml_default'; 
+    const cloudinaryCloudName = 'dh5pjhxgn'; 
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -38,7 +41,7 @@ const EditProductModal = ({ product, onClose, onSave }) => {
             toast.success('تم رفع الصورة بنجاح');
         } catch (error) {
             console.error('Error uploading image:', error);
-            toast.error('فشل في رفع الصورة');
+            toast.error('فشل في رفع الصورة: ' + error.message);
         } finally {
             setUploading(false);
         }
