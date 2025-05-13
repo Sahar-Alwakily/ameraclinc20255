@@ -36,6 +36,7 @@ async function testFirebaseConnection() {
   }
 }
 const app = express();
+// تكوين Firebase
 
 // تكوين Firebase
 const firebaseConfig = {
@@ -106,7 +107,7 @@ app.post('/api/send-whatsapp', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ خطأ في الإرسال:', error.message);
+    console.error('❌ خطأ في الإرسال:❌', error.message);
     res.status(500).json({
       success: false,
       message: error.message
@@ -147,7 +148,7 @@ app.post('/api/whatsapp-webhook', async (req, res) => {
 
     res.type('xml').send('<Response></Response>');
   } catch (error) {
-    console.error('❌ خطأ في المعالجة:', error);
+    console.error('❌ ❌❌خطأ في المعالجة:', error);
     res.status(500).type('xml').send('<Response></Response>');
   }
 });
