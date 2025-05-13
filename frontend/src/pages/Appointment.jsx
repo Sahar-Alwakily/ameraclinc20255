@@ -5,6 +5,7 @@ import 'react-calendar/dist/Calendar.css';
 import { FaUser, FaPhone, FaClock, FaCalendarAlt, FaCheck, FaWhatsapp, FaInfoCircle } from 'react-icons/fa';
 import { database } from '../dataApi/firebaseApi';
 import { ref, push, set, get, onValue, query, orderByChild, equalTo, limitToLast } from 'firebase/database';
+import moment from 'moment-timezone';
 
 const Appointment = () => {
   const [selectedDate, setSelectedDate] = useState(null);
@@ -109,7 +110,7 @@ const generateAvailableTimes = useCallback((settings, date) => {
   const endHour = settings[`day_${day}_end`] || 17;
   
   const times = [];
-  for (let hour = startHour; hour <= endHour; hour++) {
+  for (let hour = startHour; hour < endHour; hour++) {
     const period = hour < 12 ? 'صباحًا' : 'مساءً';
     const displayHour = hour > 12 ? hour - 12 : hour;
     
@@ -213,7 +214,7 @@ const handleDateChange = (date) => {
       hours24 = hours === 12 ? 0 : hours;
     }
     
-    return `${hours24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+     return `${hours24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
   };
 
 const isTimeAvailable = useCallback((time) => {
@@ -332,28 +333,35 @@ const isTimeAvailable = useCallback((time) => {
 
   try {
     // تحويل الوقت إلى تنسيق 24 ساعة
-    const [time, period] = selectedTime.split(' ');
-    const [hours, minutes] = time.split(':').map(Number);
-    
-    // ضبط الساعات حسب الفترة
-    let adjustedHours = hours;
-    if (period === 'مساءً' && hours < 12) adjustedHours += 12;
-    if (period === 'صباحًا' && hours === 12) adjustedHours = 0;
+    const time24 = convertTo24HourFormat(selectedTime);
+    const [hours, minutes] = time24.split(':').map(Number);
 
-    // إنشاء كائن التاريخ هنا قبل أي استخدام
-    const appointmentDateTime = new Date(
-      selectedDate.getFullYear(),
-      selectedDate.getMonth(),
-      selectedDate.getDate(),
-      adjustedHours,
-      minutes
+    // إنشاء تاريخ الموعد بتوقيت إسرائيل
+    const appointmentMoment = moment.tz(
+      {
+        year: selectedDate.getFullYear(),
+        month: selectedDate.getMonth(),
+        date: selectedDate.getDate(),
+        hours,
+        minutes,
+      },
+      'Asia/Jerusalem'
     );
-    appointmentDateTime.setMinutes(appointmentDateTime.getMinutes() + appointmentDateTime.getTimezoneOffset());
+
+    // التحقق من صحة التاريخ
+    if (!appointmentMoment.isValid()) {
+      toast.error('الوقت المحدد غير صحيح');
+      return;
+    }
+
+    // الوقت الحالي بتوقيت إسرائيل
+    const now = moment().tz('Asia/Jerusalem');
+
+    // حساب الفرق الزمني بالمللي ثانية
+    const timeUntilAppointment = appointmentMoment.valueOf() - now.valueOf();
 
     // التحقق من عدم الحجز في وقت ماضي
-    const now = new Date();
-    now.setMinutes(now.getMinutes() + now.getTimezoneOffset());
-    if (appointmentDateTime < now) {
+    if (timeUntilAppointment < 0) {
       toast.error('لا يمكن الحجز في أوقات ماضية');
       return;
     }
@@ -382,38 +390,59 @@ const isTimeAvailable = useCallback((time) => {
       customerName,
       phoneNumber: phoneNumber.replace(/\D/g, '').replace(/^0/, ''),
       service: selectedService,
-      date: appointmentDateTime.toISOString(),
+      date: appointmentMoment.toISOString(),
       time: selectedTime,
       createdAt: new Date().toISOString(),
-      status: 'pending'
+      status: 'pending',
+      timezone: 'Asia/Jerusalem' // إضافة المنطقة الزمنية
     };
 
     await set(newAppointmentRef, appointmentData);
 
-    // إرسال رسالة التأكيد
+    // إرسال رسالة التأكيد الفورية
     await sendWhatsAppMessage(phoneNumber, 'HX277d8bcb856090aa17ce4c441dc8f103', {
       customerName,
       selectedDate: formatArabicDate(selectedDate),
       selectedTime
     });
 
-    // إعداد التذكير قبل 24 ساعة
-    const reminderTime = new Date(appointmentDateTime.getTime() - 24 * 60 * 60 * 1000);
-    const timeUntilReminder = reminderTime.getTime() - Date.now();
+    // إعداد التذكيرات الذكية
+    if (timeUntilAppointment > 0) {
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      const oneHour = 60 * 60 * 1000;
 
-    if (timeUntilReminder > 0) {
+      let reminderDelay = 0;
+
+      // تحديد توقيت التذكير
+      if (timeUntilAppointment > twentyFourHours) {
+        reminderDelay = timeUntilAppointment - twentyFourHours;
+      } else if (timeUntilAppointment > oneHour) {
+        reminderDelay = timeUntilAppointment - oneHour;
+      } else {
+        console.log('الموعد قريب جدًا، لا يتم إرسال تذكير');
+        return;
+      }
+
+      // جدولة التذكير
       setTimeout(async () => {
         try {
-          await sendWhatsAppMessage(phoneNumber, 'HX1b073311cb981b06b540940d2462efcb', {
-            customerName,
-            selectedDate: formatArabicDate(selectedDate),
-            selectedTime
-          });
-          console.log('تم إرسال تذكير الموعد قبل 24 ساعة');
+          await sendWhatsAppMessage(
+            phoneNumber, 
+            'HX1b073311cb981b06b540940d2462efcb',
+            {
+              customerName,
+              selectedDate: formatArabicDate(selectedDate),
+              selectedTime,
+              remainingTime: timeUntilAppointment > twentyFourHours 
+                ? '24 ساعة' 
+                : 'ساعة واحدة'
+            }
+          );
+          console.log('تم إرسال التذكير حسب التوقيت المحلي');
         } catch (error) {
-          console.error('Failed to send reminder:', error);
+          console.error('فشل إرسال التذكير:', error);
         }
-      }, timeUntilReminder);
+      }, reminderDelay);
     }
 
     toast.success('تم الحجز بنجاح! سيصلك تأكيد على واتساب');
