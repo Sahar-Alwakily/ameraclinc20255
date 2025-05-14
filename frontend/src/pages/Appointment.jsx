@@ -403,39 +403,48 @@ const isTimeAvailable = useCallback((time) => {
       selectedTime
     });
 
-    // إعداد التذكيرات الذكية
-    if (timeUntilAppointment > 0) {
-      const twentyFourHours = 24 * 60 * 60 * 1000;
-      const oneHour = 60 * 60 * 1000;
+if (timeUntilAppointment > 0) {
+  // التعديلات المطلوبة:
+  const twoMinutes = 2 * 60 * 1000; // 2 دقيقة (120,000 مللي ثانية)
+  let reminderDelay = timeUntilAppointment - twoMinutes;
 
-      let reminderDelay = 0;
+  // تحقق من أن الوقت المتبقي كافٍ
+  if (reminderDelay < 0) {
+    console.log('الموعد قريب جدًا، لا يتم إرسال تذكير');
+    return;
+  }
 
-      // تحديد توقيت التذكير
-        const fiveMinutes = 2 * 60 * 1000; // 5 دقائق
-        reminderDelay = timeUntilAppointment - fiveMinutes;
-        
-        if (reminderDelay < 0) {
-          console.log('الموعد قريب جدًا، لا يتم إرسال تذكير');
-          return;
-        }
+  // جدولة التذكير
+  try {
+    const sendAt = new Date(Date.now() + reminderDelay).toISOString();
+    
+    const response = await fetch(`${apiUrl}/api/schedule-reminder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: phoneNumber.replace(/\D/g, '').replace(/^0/, ''),
+        templateId: 'HX1b073311cb981b06b540940d2462efcb',
+        variables: {
+          customerName,
+          selectedDate: formatArabicDate(selectedDate),
+          selectedTime,
+          remainingTime: '2 دقائق' // تحديث النص
+        },
+        sendAt
+      }),
+      credentials: 'include'
+    });
 
-      // جدولة التذكير
-      const sendAt = new Date(Date.now() + reminderDelay).toISOString();
-
-       const response = await fetch(`${apiUrl}/api/schedule-reminder`, {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({
-           phone: phoneNumber.replace(/\D/g, '').replace(/^0/, ''),
-           templateId: 'HX1b073311cb981b06b540940d2462efcb',
-           variables: {/*...*/},
-           sendAt // تأكد من إرسال ISO String
-         }),
-         credentials: 'include'
-       });
-
-    if (!response.ok) throw new Error('فشل جدولة التذكير');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'فشل جدولة التذكير');
     }
+
+  } catch (error) {
+    console.error('فشل في الجدولة:', error);
+    toast.error('فشل في جدولة التذكير');
+  }
+}
 
     toast.success('تم الحجز بنجاح! سيصلك تأكيد على واتساب');
     

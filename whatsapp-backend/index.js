@@ -69,9 +69,13 @@ const jobsDB = {};
 
 app.post('/api/schedule-reminder', async (req, res) => {
   try {
+    
     const { phone, templateId, variables, sendAt } = req.body;
     const jobId = `reminder_${Date.now()}`;
-    
+        console.log('وصل طلب الجدولة:', {
+      receivedAt: new Date().toISOString(),
+      scheduledAt: req.body.sendAt
+    });
     // حفظ المهمة في Firebase
     const jobsRef = ref(database, `scheduledJobs/${jobId}`);
     await set(jobsRef, {

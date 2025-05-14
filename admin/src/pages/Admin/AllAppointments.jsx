@@ -109,7 +109,7 @@ const AllAppointments = () => {
   : 'http://localhost:5000';
       // Use environment variable for API base URL
       
-      const response = await fetch(`${apiBaseUrl}/api/send-whatsapp`, {
+      const response = await fetch(`${apiUrl}/api/send-whatsapp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
