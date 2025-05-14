@@ -398,8 +398,8 @@ const isTimeAvailable = useCallback((time) => {
 
 if (timeUntilAppointment > 0) {
   // التعديلات المطلوبة:
-  const twoMinutes = 2 * 60 * 1000; // 2 دقيقة (120,000 مللي ثانية)
-  let reminderDelay = timeUntilAppointment - twoMinutes;
+    const thirtySeconds = 30 * 1000; // 30 ثانية
+    let reminderDelay = thirtySeconds; // إرسال بعد 30 ثانية من الآن
 
   // تحقق من أن الوقت المتبقي كافٍ
   if (reminderDelay < 0) {
