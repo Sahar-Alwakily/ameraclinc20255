@@ -8,12 +8,14 @@ const { initializeApp } = require('firebase/app'); // التعديل هنا
 const { 
   getDatabase, 
   ref, 
+  get,
   set, 
+  update, // أضف هذه الدالة
   orderByChild, 
   equalTo, 
   limitToLast,
   query,
-  onValue // أضف هذا
+  onValue
 } = require('firebase/database');
 const schedule = require('node-schedule'); // أضف هذه السطر في الأعلى
 
@@ -84,22 +86,6 @@ const client = twilio(
   process.env.TWILIO_AUTH_TOKEN   // التعديل هنا
 );
 
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true
-}));
-
-// أضف هذا الجزء لتجنب مشاكل CORS في الطلبات المسبقة (OPTIONS)
-app.options('*', cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true
-}));app.use(cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true
-}));
 
 // أضف هذا الجزء لتجنب مشاكل CORS في الطلبات المسبقة (OPTIONS)
 app.options('*', cors({
@@ -107,6 +93,9 @@ app.options('*', cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 }));
+
+
+
 
 
 app.post('/api/schedule-reminder', async (req, res) => {
@@ -173,25 +162,31 @@ app.post('/api/send-whatsapp', async (req, res) => {
 app.post('/api/whatsapp-webhook', async (req, res) => {
   try {
     const userPhone = req.body.From.replace(/\D/g, '').replace(/^972/, '');
-    const appointmentsRef = database.ref('appointments');
 
-    const snapshot = await appointmentsRef
-      .orderByChild('phoneNumber')
-      .equalTo(userPhone)
-      .limitToLast(1)
-      .once('value');
+const appointmentsRef = ref(database, 'appointments');
+const q = query(
+  appointmentsRef,
+  orderByChild('phoneNumber'),
+  equalTo(userPhone),
+  limitToLast(1)
+);
+
+const snapshot = await get(q);
 
     if (!snapshot.exists()) {
       return res.type('xml').send('<Response></Response>');
     }
 
-    const [appointmentId, appointmentData] = Object.entries(snapshot.val())[0];
+const appointmentsData = snapshot.val();
+const appointmentId = Object.keys(appointmentsData)[0];
+const appointmentData = appointmentsData[appointmentId];
 
     if (req.body.ButtonPayload === 'confirmed') {
-      await appointmentsRef.child(appointmentId).update({
-        status: 'confirmed',
-        confirmedAt: new Date().toISOString()
-      });
+     const appointmentRef = ref(database, `appointments/${appointmentId}`);
+     await update(appointmentRef, {
+     status: 'confirmed',
+     confirmedAt: new Date().toISOString()
+     });
 
       await client.messages.create({
         body: `تم تأكيد موعدك بتاريخ ${appointmentData.date}`,
