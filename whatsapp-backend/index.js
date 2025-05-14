@@ -130,10 +130,10 @@ app.post('/api/schedule-reminder', async (req, res) => {
 async function restoreScheduledJobs() {
   const jobsRef = ref(database, 'scheduledJobs');
   const snapshot = await get(jobsRef);
-  console.log('⏰ تشغيل التذكير:', jobId, new Date().toISOString());
 
   if (snapshot.exists()) {
     Object.entries(snapshot.val()).forEach(([jobId, jobData]) => {
+      console.log('⏰ تشغيل التذكير:', jobId, new Date().toISOString());
       if (jobData.status === 'scheduled' && new Date(jobData.sendAt) > new Date()) {
         const job = schedule.scheduleJob(new Date(jobData.sendAt), async () => {
           try {
