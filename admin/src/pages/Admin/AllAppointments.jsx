@@ -104,9 +104,9 @@ const AllAppointments = () => {
   const sendWhatsAppMessage = async (phone, templateId, variables) => {
     try {
 
-      const apiUrl = import.meta.env.PROD 
-      ? 'https://us-central1-ameraclinic-326b2.cloudfunctions.net/api' 
-      : 'http://localhost:5000';
+  const apiUrl = import.meta.env.PROD 
+  ? 'https://www.api.ameraclinic.com' 
+  : 'http://localhost:5000';
       // Use environment variable for API base URL
       
       const response = await fetch(`${apiBaseUrl}/api/send-whatsapp`, {

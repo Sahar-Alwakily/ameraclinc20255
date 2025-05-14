@@ -411,14 +411,13 @@ const isTimeAvailable = useCallback((time) => {
       let reminderDelay = 0;
 
       // تحديد توقيت التذكير
-      if (timeUntilAppointment > twentyFourHours) {
-        reminderDelay = timeUntilAppointment - twentyFourHours;
-      } else if (timeUntilAppointment > oneHour) {
-        reminderDelay = timeUntilAppointment - oneHour;
-      } else {
-        console.log('الموعد قريب جدًا، لا يتم إرسال تذكير');
-        return;
-      }
+        const fiveMinutes = 2 * 60 * 1000; // 5 دقائق
+        reminderDelay = timeUntilAppointment - fiveMinutes;
+        
+        if (reminderDelay < 0) {
+          console.log('الموعد قريب جدًا، لا يتم إرسال تذكير');
+          return;
+        }
 
       // جدولة التذكير
       const sendAt = new Date(Date.now() + reminderDelay).toISOString();
