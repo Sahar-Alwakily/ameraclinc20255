@@ -397,20 +397,20 @@ const isTimeAvailable = useCallback((time) => {
     });
 
 if (timeUntilAppointment > 0) {
-  // التعديلات المطلوبة:
-    const thirtySeconds = 30 * 1000; // 30 ثانية
-    let reminderDelay = thirtySeconds; // إرسال بعد 30 ثانية من الآن
+  const twentyFourHours = 24 * 60 * 60 * 1000; // 24 ساعة بالمللي ثانية
+  let reminderDelay;
 
-  // تحقق من أن الوقت المتبقي كافٍ
-  if (reminderDelay < 0) {
-    console.log('الموعد قريب جدًا، لا يتم إرسال تذكير');
-    return;
+  if (timeUntilAppointment <= twentyFourHours) {
+    // إذا الموعد خلال أقل من 24 ساعة
+    reminderDelay = 60 * 60 * 1000; // 1 ساعة من الآن
+  } else {
+    // إذا الموعد بعد أكثر من 24 ساعة
+    reminderDelay = timeUntilAppointment - twentyFourHours;
   }
 
-  // جدولة التذكير
+  const sendAt = new Date(Date.now() + reminderDelay).toISOString();
+
   try {
-    const sendAt = new Date(Date.now() + reminderDelay).toISOString();
-    
     const response = await fetch(`${apiUrl}/api/schedule-reminder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -421,7 +421,9 @@ if (timeUntilAppointment > 0) {
           customerName,
           selectedDate: formatArabicDate(selectedDate),
           selectedTime,
-          remainingTime: '2 دقائق' // تحديث النص
+          remainingTime: timeUntilAppointment <= twentyFourHours 
+            ? 'ساعة واحدة' 
+            : '24 ساعة'
         },
         sendAt
       }),

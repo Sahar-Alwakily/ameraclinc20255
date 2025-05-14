@@ -37,7 +37,8 @@ const database = getDatabase(firebaseApp);
 const allowedOrigins = [
   'https://www.ameraclinic.com',
   'https://api.ameraclinic.com',
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'https://www.admin.ameraclinic.com'
 ];
 
 const corsOptions = {
@@ -133,8 +134,11 @@ async function restoreScheduledJobs() {
 
   if (snapshot.exists()) {
     Object.entries(snapshot.val()).forEach(([jobId, jobData]) => {
-      console.log('⏰ تشغيل التذكير:', jobId, new Date().toISOString());
-      if (jobData.status === 'scheduled' && new Date(jobData.sendAt) > new Date()) {
+    const job = schedule.scheduleJob(new Date(sendAt), async () => {
+    console.log('📅 نوع التذكير:', 
+    timeUntilAppointment <= twentyFourHours ? 'تذكير قبل ساعة' : 'تذكير قبل 24 ساعة'
+     );      
+     if (jobData.status === 'scheduled' && new Date(jobData.sendAt) > new Date()) {
         const job = schedule.scheduleJob(new Date(jobData.sendAt), async () => {
           try {
                 await client.messages.create({
@@ -217,17 +221,37 @@ app.post('/api/whatsapp-webhook', async (req, res) => {
     const appointmentId = Object.keys(appointmentsData)[0];
     const appointmentData = appointmentsData[appointmentId];
 
-    if (req.body.ButtonPayload === 'confirmed') {
-      const appointmentRef = ref(database, `appointments/${appointmentId}`);
-      await update(appointmentRef, {
+if (req.body.ButtonPayload === 'confirmed') {
+      // تحديث حالة الموعد
+      await update(appointmentsRef, {
         status: 'confirmed',
         confirmedAt: new Date().toISOString()
       });
 
+      // إرسال الرد باستخدام القالب المحدد
       await client.messages.create({
-        body: `تم تأكيد موعدك بتاريخ ${appointmentData.date}`,
+        contentSid: 'HX1497f9f86940632a3cc4571dc764016d',
         from: 'whatsapp:+972545380785',
-        to: req.body.From
+        to: req.body.From,
+        contentVariables: JSON.stringify({
+          selectedDate: appointmentData.date,
+          selectedTime: appointmentData.time
+        })
+      });
+    } 
+    else if (req.body.ButtonPayload === 'rescheduled') {
+        await update(appointmentsRef, {
+    status: 'rescheduled',
+    rescheduledAt: new Date().toISOString()
+  });
+      await client.messages.create({
+        contentSid: 'HXef7215391ae4a15e77ac83d855c37980',
+        from: 'whatsapp:+972545380785',
+        to: req.body.From,
+        contentVariables: JSON.stringify({
+          selectedDate: appointmentData.date,
+          selectedTime: appointmentData.time
+        })
       });
     }
 
