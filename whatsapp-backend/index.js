@@ -17,6 +17,7 @@ const {
 } = require('firebase/database');
 const schedule = require('node-schedule'); // أضف هذه السطر في الأعلى
 
+
 // تعديل دالة اختبار الاتصال
 async function testFirebaseConnection() {
   try {
@@ -38,26 +39,9 @@ async function testFirebaseConnection() {
 }
 const app = express();
 // تكوين Firebase
-app.post('/api/schedule-reminder', async (req, res) => {
-  try {
-    const { phone, templateId, variables, sendAt } = req.body;
-    
-    const job = schedule.scheduleJob(sendAt, async () => {
-      await client.messages.create({
-        contentSid: templateId,
-        from: 'whatsapp:+972545380785',
-        to: `whatsapp:+972${phone.replace(/\D/g, '').replace(/^0/, '')}`,
-        contentVariables: JSON.stringify(variables)
-      });
-    });
 
-    res.json({ success: true, jobId: job.name });
 
-  } catch (error) {
-    console.error('рҹ”Ҙ Ш®Ш·ШЈ ШҰЩҒЩҠ Ш§Щ„Ш¬ШҜЩҲЩ„Ш©:', error);
-    res.status(500).json({ success: false });
-  }
-});
+
 // تكوين Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyAwISrrsswQWNSU0D-V0m8co61jmX0jYEw",
@@ -80,6 +64,9 @@ const allowedOrigins = [
   'https://www.ameraclinic.com',
   'https://www.api.ameraclinic.com',
   'https://www.admin.ameraclinic.com',
+  'https://ameraclinic.com',       // نطاق التطبيق الرئيسي
+  'https://api.ameraclinic.com',       // أزل 'www.' إذا لزم الأمر
+  'https://admin.ameraclinic.com',
 ];
 
 app.use(cors({
@@ -97,6 +84,53 @@ const client = twilio(
   process.env.TWILIO_AUTH_TOKEN   // التعديل هنا
 );
 
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
+
+// أضف هذا الجزء لتجنب مشاكل CORS في الطلبات المسبقة (OPTIONS)
+app.options('*', cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));app.use(cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
+
+// أضف هذا الجزء لتجنب مشاكل CORS في الطلبات المسبقة (OPTIONS)
+app.options('*', cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
+
+
+app.post('/api/schedule-reminder', async (req, res) => {
+  try {
+    const { phone, templateId, variables, sendAt } = req.body;
+    
+    const job = schedule.scheduleJob(sendAt, async () => {
+      await client.messages.create({
+        contentSid: templateId,
+        from: 'whatsapp:+972545380785',
+        to: `whatsapp:+972${phone.replace(/\D/g, '').replace(/^0/, '')}`,
+        contentVariables: JSON.stringify(variables)
+      });
+    });
+    res.header('Access-Control-Allow-Origin', allowedOrigins);
+    res.header('Access-Control-Allow-Methods', 'POST');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    res.json({ success: true, jobId: job.name });
+
+  } catch (error) {
+    console.error('рҹ”Ҙ Ш®Ш·ШЈ ШҰЩҒЩҠ Ш§Щ„Ш¬ШҜЩҲЩ„Ш©:', error);
+    res.status(500).json({ success: false });
+  }
+});
 
 
 // إرسال رسالة واتساب
