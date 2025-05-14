@@ -78,15 +78,6 @@ const Appointment = () => {
           }
         }
 
-        // جلب الحجوزات
-        // جلب الحجوزات
-        // جلب الحجوزات
-        // جلب الحجوزات
-        // جلب الحجوزات
-        // جلب الحجوزات
-        // جلب الحجوزات
-
-        // الاشتراك في تحديثات الحجوزات
         const appointmentsRef = ref(database, 'appointments');
         onValue(appointmentsRef, (snapshot) => {
           if (snapshot.exists()) {
@@ -430,25 +421,29 @@ const isTimeAvailable = useCallback((time) => {
       }
 
       // جدولة التذكير
-      setTimeout(async () => {
-        try {
-          await sendWhatsAppMessage(
-            phoneNumber, 
-            'HX1b073311cb981b06b540940d2462efcb',
-            {
-              customerName,
-              selectedDate: formatArabicDate(selectedDate),
-              selectedTime,
-              remainingTime: timeUntilAppointment > twentyFourHours 
-                ? '24 ساعة' 
-                : 'ساعة واحدة'
-            }
-          );
-          console.log('تم إرسال التذكير حسب التوقيت المحلي');
-        } catch (error) {
-          console.error('فشل إرسال التذكير:', error);
-        }
-      }, reminderDelay);
+const sendAt = new Date(Date.now() + reminderDelay);
+
+const response = await fetch(`${apiUrl}/api/schedule-reminder`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    phone: phoneNumber.replace(/\D/g, '').replace(/^0/, ''),
+    templateId: 'HX1b073311cb981b06b540940d2462efcb',
+    variables: {
+      customerName,
+      selectedDate: formatArabicDate(selectedDate),
+      selectedTime,
+      remainingTime: timeUntilAppointment > twentyFourHours 
+        ? '24 ساعة' 
+        : 'ساعة واحدة'
+    },
+    sendAt: sendAt.toISOString()
+    })
+    });
+
+    if (!response.ok) throw new Error('فشل جدولة التذكير');
     }
 
     toast.success('تم الحجز بنجاح! سيصلك تأكيد على واتساب');

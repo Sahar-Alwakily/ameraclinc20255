@@ -15,6 +15,7 @@ const {
   query,
   onValue // أضف هذا
 } = require('firebase/database');
+const schedule = require('node-schedule'); // أضف هذه السطر في الأعلى
 
 // تعديل دالة اختبار الاتصال
 async function testFirebaseConnection() {
@@ -37,7 +38,26 @@ async function testFirebaseConnection() {
 }
 const app = express();
 // تكوين Firebase
+app.post('/api/schedule-reminder', async (req, res) => {
+  try {
+    const { phone, templateId, variables, sendAt } = req.body;
+    
+    const job = schedule.scheduleJob(sendAt, async () => {
+      await client.messages.create({
+        contentSid: templateId,
+        from: 'whatsapp:+972545380785',
+        to: `whatsapp:+972${phone.replace(/\D/g, '').replace(/^0/, '')}`,
+        contentVariables: JSON.stringify(variables)
+      });
+    });
 
+    res.json({ success: true, jobId: job.name });
+
+  } catch (error) {
+    console.error('рҹ”Ҙ Ш®Ш·ШЈ ШҰЩҒЩҠ Ш§Щ„Ш¬ШҜЩҲЩ„Ш©:', error);
+    res.status(500).json({ success: false });
+  }
+});
 // تكوين Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyAwISrrsswQWNSU0D-V0m8co61jmX0jYEw",
