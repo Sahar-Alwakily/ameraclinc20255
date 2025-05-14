@@ -1,50 +1,24 @@
-// index.js
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const express = require('express');
 const twilio = require('twilio');
 const cors = require('cors');
-const { initializeApp } = require('firebase/app'); // التعديل هنا
+const { initializeApp } = require('firebase/app');
 const { 
   getDatabase, 
   ref, 
   get,
   set, 
-  update, // أضف هذه الدالة
+  update,
   orderByChild, 
   equalTo, 
   limitToLast,
   query,
-  onValue
+  onValue 
 } = require('firebase/database');
-const schedule = require('node-schedule'); // أضف هذه السطر في الأعلى
+const schedule = require('node-schedule');
 
-
-// تعديل دالة اختبار الاتصال
-async function testFirebaseConnection() {
-  try {
-    const testRef = ref(database, 'connection_test'); // التعديل هنا
-    await set(testRef, { 
-      status: 'connected', 
-      timestamp: Date.now() 
-    });
-    
-    const snapshot = await new Promise((resolve) => {
-      onValue(testRef, (snapshot) => resolve(snapshot), { onlyOnce: true });
-    });
-    
-    return !!snapshot.val();
-  } catch (error) {
-    console.error('🔥 فشل اتصال Firebase:', error.message);
-    return false;
-  }
-}
-const app = express();
-// تكوين Firebase
-
-
-
-// تكوين Firebase
+// 1. تكوين Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyAwISrrsswQWNSU0D-V0m8co61jmX0jYEw",
   authDomain: "ameraclinic-326b2.firebaseapp.com",
@@ -56,73 +30,74 @@ const firebaseConfig = {
   measurementId: "G-3SFZLYKMNF"
 };
 
-// التهيئة الصحيحة
 const firebaseApp = initializeApp(firebaseConfig);
-const database = getDatabase(firebaseApp); // التعديل هنا
-// تكوين CORS
+const database = getDatabase(firebaseApp);
+
+// 2. تكوين CORS بشكل صحيح
 const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:5174',
   'https://www.ameraclinic.com',
-  'https://www.api.ameraclinic.com',
-  'https://www.admin.ameraclinic.com',
-  'https://ameraclinic.com',       // نطاق التطبيق الرئيسي
-  'https://api.ameraclinic.com',       // أزل 'www.' إذا لزم الأمر
-  'https://admin.ameraclinic.com',
+  'https://api.ameraclinic.com',
+  'http://localhost:3000'
 ];
 
-app.use(cors({
-  origin: allowedOrigins,
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (allowedOrigins.includes(origin) || !origin) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
-}));
+};
 
+const app = express();
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// تكوين Twilio
+// 3. تكوين Twilio
 const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID, // التعديل هنا
-  process.env.TWILIO_AUTH_TOKEN   // التعديل هنا
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
 );
 
-
-// أضف هذا الجزء لتجنب مشاكل CORS في الطلبات المسبقة (OPTIONS)
-app.options('*', cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true
-}));
-
-
-
-
-
+// 4. إصلاح نقطة جدولة التذكيرات
 app.post('/api/schedule-reminder', async (req, res) => {
   try {
     const { phone, templateId, variables, sendAt } = req.body;
     
-    const job = schedule.scheduleJob(sendAt, async () => {
-      await client.messages.create({
-        contentSid: templateId,
-        from: 'whatsapp:+972545380785',
-        to: `whatsapp:+972${phone.replace(/\D/g, '').replace(/^0/, '')}`,
-        contentVariables: JSON.stringify(variables)
-      });
+    const job = schedule.scheduleJob(new Date(sendAt), async () => {
+      try {
+        await client.messages.create({
+          contentSid: templateId,
+          from: 'whatsapp:+972545380785',
+          to: `whatsapp:+972${phone.replace(/\D/g, '').replace(/^0/, '')}`,
+          contentVariables: JSON.stringify(variables)
+        });
+      } catch (error) {
+        console.error('❌ فشل إرسال التذكير:', error);
+      }
     });
-    res.header('Access-Control-Allow-Origin', allowedOrigins);
-    res.header('Access-Control-Allow-Methods', 'POST');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
-    res.json({ success: true, jobId: job.name });
+
+    res.json({ 
+      success: true, 
+      jobId: job.name,
+      message: 'تم جدولة التذكير بنجاح'
+    });
 
   } catch (error) {
-    console.error('рҹ”Ҙ Ш®Ш·ШЈ ШҰЩҒЩҠ Ш§Щ„Ш¬ШҜЩҲЩ„Ш©:', error);
-    res.status(500).json({ success: false });
+    console.error('❌ خطأ في الجدولة:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
   }
 });
 
-
-// إرسال رسالة واتساب
+// 5. نقطة إرسال رسالة الواتساب
 app.post('/api/send-whatsapp', async (req, res) => {
   try {
     const { templateId, phone, variables } = req.body;
@@ -150,43 +125,43 @@ app.post('/api/send-whatsapp', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ خطأ في الإرسال:❌', error.message);
+    console.error('❌ خطأ في الإرسال:', error.message);
     res.status(500).json({
       success: false,
-      message: error.message
+      error: error.message
     });
   }
 });
 
-// ويب هوك استقبال الردود
+// 6. ويب هوك استقبال الردود
 app.post('/api/whatsapp-webhook', async (req, res) => {
   try {
     const userPhone = req.body.From.replace(/\D/g, '').replace(/^972/, '');
+    
+    const appointmentsRef = ref(database, 'appointments');
+    const q = query(
+      appointmentsRef,
+      orderByChild('phoneNumber'),
+      equalTo(userPhone),
+      limitToLast(1)
+    );
 
-const appointmentsRef = ref(database, 'appointments');
-const q = query(
-  appointmentsRef,
-  orderByChild('phoneNumber'),
-  equalTo(userPhone),
-  limitToLast(1)
-);
-
-const snapshot = await get(q);
+    const snapshot = await get(q);
 
     if (!snapshot.exists()) {
       return res.type('xml').send('<Response></Response>');
     }
 
-const appointmentsData = snapshot.val();
-const appointmentId = Object.keys(appointmentsData)[0];
-const appointmentData = appointmentsData[appointmentId];
+    const appointmentsData = snapshot.val();
+    const appointmentId = Object.keys(appointmentsData)[0];
+    const appointmentData = appointmentsData[appointmentId];
 
     if (req.body.ButtonPayload === 'confirmed') {
-     const appointmentRef = ref(database, `appointments/${appointmentId}`);
-     await update(appointmentRef, {
-     status: 'confirmed',
-     confirmedAt: new Date().toISOString()
-     });
+      const appointmentRef = ref(database, `appointments/${appointmentId}`);
+      await update(appointmentRef, {
+        status: 'confirmed',
+        confirmedAt: new Date().toISOString()
+      });
 
       await client.messages.create({
         body: `تم تأكيد موعدك بتاريخ ${appointmentData.date}`,
@@ -196,11 +171,29 @@ const appointmentData = appointmentsData[appointmentId];
     }
 
     res.type('xml').send('<Response></Response>');
+
   } catch (error) {
-    console.error('❌ ❌❌خطأ في المعالجة:', error);
+    console.error('❌ خطأ في المعالجة:', error);
     res.status(500).type('xml').send('<Response></Response>');
   }
 });
+
+// 7. اختبار الاتصالات
+async function testFirebaseConnection() {
+  try {
+    const testRef = ref(database, 'connection_test');
+    await set(testRef, { status: 'connected', timestamp: Date.now() });
+    
+    const snapshot = await new Promise((resolve) => {
+      onValue(testRef, (snapshot) => resolve(snapshot), { onlyOnce: true });
+    });
+    
+    return !!snapshot.val();
+  } catch (error) {
+    console.error('🔥 فشل اتصال Firebase:', error.message);
+    return false;
+  }
+}
 
 async function testTwilioConnection() {
   try {
@@ -211,9 +204,9 @@ async function testTwilioConnection() {
     return false;
   }
 }
-// تشغيل الخادم
-const PORT = process.env.PORT || 5000;
 
+// 8. تشغيل الخادم
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {
   console.log(`
   ██████╗  ██████╗ ██████╗ ██╗   ██╗
