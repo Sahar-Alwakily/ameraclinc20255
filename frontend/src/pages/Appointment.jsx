@@ -421,27 +421,19 @@ const isTimeAvailable = useCallback((time) => {
       }
 
       // جدولة التذكير
-const sendAt = new Date(Date.now() + reminderDelay);
+      const sendAt = new Date(Date.now() + reminderDelay).toISOString();
 
-const response = await fetch(`${apiUrl}/api/schedule-reminder`, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    phone: phoneNumber.replace(/\D/g, '').replace(/^0/, ''),
-    templateId: 'HX1b073311cb981b06b540940d2462efcb',
-    variables: {
-      customerName,
-      selectedDate: formatArabicDate(selectedDate),
-      selectedTime,
-      remainingTime: timeUntilAppointment > twentyFourHours 
-        ? '24 ساعة' 
-        : 'ساعة واحدة'
-    },
-    sendAt: sendAt.toISOString()
-    })
-    });
+       const response = await fetch(`${apiUrl}/api/schedule-reminder`, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           phone: phoneNumber.replace(/\D/g, '').replace(/^0/, ''),
+           templateId: 'HX1b073311cb981b06b540940d2462efcb',
+           variables: {/*...*/},
+           sendAt // تأكد من إرسال ISO String
+         }),
+         credentials: 'include'
+       });
 
     if (!response.ok) throw new Error('فشل جدولة التذكير');
     }
