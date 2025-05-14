@@ -136,8 +136,13 @@ async function restoreScheduledJobs() {
       if (jobData.status === 'scheduled' && new Date(jobData.sendAt) > new Date()) {
         const job = schedule.scheduleJob(new Date(jobData.sendAt), async () => {
           try {
-            await client.messages.create({/*...*/});
-            await update(ref(database, `scheduledJobs/${jobId}`), { status: 'delivered' });
+                await client.messages.create({
+                  contentSid: jobData.templateId,
+                  from: 'whatsapp:+972545380785',
+                  to: `whatsapp:+972${jobData.phone.replace(/\D/g, '').replace(/^0/, '')}`,
+                  contentVariables: JSON.stringify(jobData.variables)
+                });            
+                await update(ref(database, `scheduledJobs/${jobId}`), { status: 'delivered' });
           } catch (error) {
             await update(ref(database, `scheduledJobs/${jobId}`), { status: 'failed' });
           }

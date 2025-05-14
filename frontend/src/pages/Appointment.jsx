@@ -334,16 +334,9 @@ const isTimeAvailable = useCallback((time) => {
     const [hours, minutes] = time24.split(':').map(Number);
 
     // إنشاء تاريخ الموعد بتوقيت إسرائيل
-    const appointmentMoment = moment.tz(
-      {
-        year: selectedDate.getFullYear(),
-        month: selectedDate.getMonth(),
-        date: selectedDate.getDate(),
-        hours,
-        minutes,
-      },
-      'Asia/Jerusalem'
-    );
+    const appointmentMoment = moment(selectedDate)
+  .set({ hour: hours, minute: minutes })
+  .tz('Asia/Jerusalem', true);
 
     // التحقق من صحة التاريخ
     if (!appointmentMoment.isValid()) {
