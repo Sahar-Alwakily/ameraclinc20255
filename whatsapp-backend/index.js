@@ -134,8 +134,8 @@ async function restoreScheduledJobs() {
 
   if (snapshot.exists()) {
     Object.entries(snapshot.val()).forEach(([jobId, jobData]) => {
-    console.log('📅 نوع التذكير:', timeUntilAppointment <= twentyFourHours ? 'تذكير قبل ساعة' : 'تذكير قبل 24 ساعة' );
-        if (jobData.status === 'scheduled' && new Date(jobData.sendAt) > new Date()) {
+      console.log('⏰ تشغيل التذكير:', jobId, new Date().toISOString());
+      if (jobData.status === 'scheduled' && new Date(jobData.sendAt) > new Date()) {
         const job = schedule.scheduleJob(new Date(jobData.sendAt), async () => {
           try {
                 await client.messages.create({
