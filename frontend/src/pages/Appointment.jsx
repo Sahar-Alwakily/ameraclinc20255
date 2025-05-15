@@ -397,18 +397,16 @@ const isTimeAvailable = useCallback((time) => {
     });
 
 if (timeUntilAppointment > 0) {
-  const twentyFourHours = 24 * 60 * 60 * 1000; // 24 ساعة بالمللي ثانية
-  let reminderDelay;
+  const threeHours = 3 * 60 * 60 * 1000; // 3 ساعات بالمللي ثانية
+  let reminderDelay = timeUntilAppointment - threeHours;
 
-  if (timeUntilAppointment <= twentyFourHours) {
-    // إذا الموعد خلال أقل من 24 ساعة
-    reminderDelay = 60 * 60 * 1000; // 1 ساعة من الآن
-  } else {
-    // إذا الموعد بعد أكثر من 24 ساعة
-    reminderDelay = timeUntilAppointment - twentyFourHours;
+  // منع الجدولة إذا كان الوقت المتبقي أقل من 3 ساعات
+  if (reminderDelay < 0) {
+    console.log('الموعد قريب جدًا، لا يتم إرسال تذكير');
+    return;
   }
 
-  const sendAt = new Date(Date.now() + reminderDelay).toISOString();
+  const sendAt = new Date(appointmentMoment.valueOf() - threeHours).toISOString();
 
   try {
     const response = await fetch(`${apiUrl}/api/schedule-reminder`, {
@@ -421,9 +419,7 @@ if (timeUntilAppointment > 0) {
           customerName,
           selectedDate: formatArabicDate(selectedDate),
           selectedTime,
-          remainingTime: timeUntilAppointment <= twentyFourHours 
-            ? 'ساعة واحدة' 
-            : '24 ساعة'
+          remainingTime: '3 ساعات'
         },
         sendAt
       }),
@@ -441,9 +437,8 @@ if (timeUntilAppointment > 0) {
   }
 }
 
+
     toast.success('تم الحجز بنجاح! سيصلك تأكيد على واتساب');
-    
-    // إعادة تعيين الحقول
     setSelectedDate(null);
     setSelectedTime('');
     setSelectedService('');
