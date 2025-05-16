@@ -7,7 +7,9 @@ import { registerLocale } from "react-datepicker";
 import ar from 'date-fns/locale/ar';
 import ScheduleSettingsModal from './ScheduleSettingsModal';
 registerLocale('ar', ar);
-
+import moment from 'moment-timezone';
+import 'moment/locale/ar';
+moment.locale('ar');
 const statusOptions = [
   { value: "all", label: "جميع الحالات" },
   { value: "pending", label: "بانتظار التأكيد" },
@@ -60,18 +62,25 @@ const AllAppointments = () => {
         // جلب الحجوزات
         const appointmentsSnapshot = await get(ref(database, 'appointments'));
         if (appointmentsSnapshot.exists()) {
-          const bookingsData = Object.entries(appointmentsSnapshot.val()).map(([id, booking]) => ({
-            id,
-            name: booking.customerName,
-            phone: `+972${booking.phoneNumber}`,
-            date: new Date(booking.date).toISOString().split('T')[0],
-            time: convertTo12HourFormat(booking.time),
-            service: booking.service,
-            status: booking.status || "pending",
-            confirmedAt: booking.confirmedAt || null,
-            cancelledAt: booking.cancelledAt || null,
-            createdAt: booking.createdAt
-          }));
+        const bookingsData = Object.entries(appointmentsSnapshot.val()).map(([id, booking]) => {
+  // التحقق من صحة التاريخ قبل التحويل
+              const isValidDate = moment(booking.date).isValid();
+  
+             return {
+                id,
+                name: booking.customerName,
+                phone: `+972${booking.phoneNumber}`,
+                date: isValidDate ? 
+                  moment(booking.date).format('YYYY-MM-DD') : 
+                  'تاريخ غير صالح',
+                time: convertTo12HourFormat(booking.time),
+                service: booking.service,
+                status: booking.status || "pending",
+                confirmedAt: booking.confirmedAt || null,
+                cancelledAt: booking.cancelledAt || null,
+                createdAt: booking.createdAt
+              };
+            });
           
           setBookings(bookingsData);
           setFilteredBookings(bookingsData);
@@ -144,43 +153,40 @@ const AllAppointments = () => {
     return slots;
   };
 
-  const generateWeekDays = () => {
-    const today = new Date();
-    const days = [];
+const generateWeekDays = () => {
+  const today = moment(); // استخدام moment
+  const days = [];
+  
+  for (let i = 0; i < 7; i++) {
+    const date = today.clone().add(i, 'days'); // استخدام clone() و add()
     
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      
-      const dayNames = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-      const shortDayNames = ["أحد", "إثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
-      
-      days.push({
-        date: date.toISOString().split('T')[0],
-        day: dayNames[date.getDay()],
-        shortDay: shortDayNames[date.getDay()],
-        isToday: i === 0,
-        dayNumber: date.getDate()
-      });
-    }
-    
-    setWeekDays(days);
-  };
+    days.push({
+      date: date.format('YYYY-MM-DD'), // استخدام format() بدلًا من toISOString()
+      day: date.format('dddd'), // الحصول على اسم اليوم بالعربية
+      shortDay: date.format('ddd'), // اسم اليوم المختصر
+      isToday: i === 0,
+      dayNumber: date.date() // الحصول على رقم اليوم
+    });
+  }
+  
+  setWeekDays(days);
+};
 
-  const convertTo12HourFormat = (time) => {
-    if (!time) return "";
-    if (time.includes("AM") || time.includes("PM")) return time;
-    
-    const timeParts = time.split(/[: ]/);
-    let hours = parseInt(timeParts[0]);
-    const minutes = timeParts[1] || "00";
-    const period = time.includes("صباحًا") ? "AM" : "PM";
-    
-    if (period === "PM" && hours < 12) hours += 12;
-    if (period === "AM" && hours === 12) hours = 0;
-    
-    return `${hours > 12 ? hours - 12 : hours}:${minutes} ${period}`;
-  };
+const convertTo12HourFormat = (time) => {
+  if (!time) return "وقت غير معروف";
+  
+  // معالجة التنسيقات العربية
+  const normalizedTime = time
+    .replace('صباحًا', 'AM')
+    .replace('مساءً', 'PM')
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+
+  const momentTime = moment(normalizedTime, 'HH:mm:ss');
+  
+  if (!momentTime.isValid()) return "تنسيق وقت خاطئ";
+  
+  return momentTime.format('h:mm A');
+};
 
   const getStatusBadge = (status) => {
     switch (status) {
