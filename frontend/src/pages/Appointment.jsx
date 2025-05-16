@@ -129,6 +129,7 @@ useEffect(() => {
 
 // 4. تعديل دالة handleDateChange
 const handleDateChange = (date) => {
+  if (!date || isNaN(date.getTime())) return;
   setSelectedDate(date);
   setSelectedTime('');
   if (scheduleSettings) {
@@ -165,7 +166,8 @@ const handleDateChange = (date) => {
 
   const isTimeBooked = useCallback((time) => {
     if (!selectedDate) return false;
-    
+    if (isNaN(selectedDate.getTime())) return false;
+
     // تحويل التاريخ المحدد إلى توقيت إسرائيل
     const userDate = new Date(selectedDate);
     userDate.setHours(0, 0, 0, 0);
@@ -189,7 +191,8 @@ const handleDateChange = (date) => {
   // دالة مساعدة لتحويل الوقت من 12 ساعة إلى 24 ساعة
   const convertTo24HourFormat = (time12h) => {
     if (!time12h) return '';
-    
+    const timeRegex = /(\d{1,2}):(\d{2})\s(صباحًا|مساءً)/;
+    if (!timeRegex.test(time12h)) return '';
     // إذا كان التنسيق يحتوي على AM/PM بالفعل (مثل البيانات القديمة)
     if (time12h.includes('AM') || time12h.includes('PM')) {
       const [time, period] = time12h.split(' ');
@@ -327,7 +330,10 @@ const isTimeAvailable = useCallback((time) => {
     toast.warning('الرجاء تعبئة جميع الحقول!');
     return;
   }
-
+  if (isNaN(appointmentMoment.toDate().getTime())) {
+    toast.error('الوقت المحدد غير صحيح');
+    return;
+  }
   try {
     // تحويل الوقت إلى تنسيق 24 ساعة
     const time24 = convertTo24HourFormat(selectedTime);
