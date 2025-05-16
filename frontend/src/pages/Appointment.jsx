@@ -185,16 +185,18 @@ const handleDateChange = (date) => {
   }, [selectedDate, bookedAppointments]);
   
   // دالة مساعدة لتحويل الوقت من 12 ساعة إلى 24 ساعة
-  const convertTo24HourFormat = (time12h) => {
-    if (!time12h) return '';
-    try {
-      const time = moment(time12h, 'h:mm A', 'ar');
-      if (!time.isValid()) return '';
-      return time.format('HH:mm:ss');
-    } catch {
-      return '';
-    }
-  };
+const convertTo24HourFormat = (timeStr) => {
+  if (!timeStr) return '';
+  
+  // معالجة التنسيقات العربية
+  const normalizedTime = timeStr
+    .replace('صباحًا', 'AM')
+    .replace('مساءً', 'PM')
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+
+  const time = moment(normalizedTime, 'h:mm A');
+  return time.isValid() ? time.format('HH:mm:ss') : '';
+};
 
 const isTimeAvailable = useCallback((time) => {
   if (!selectedDate || !scheduleSettings) return true;
@@ -311,24 +313,22 @@ const isTimeAvailable = useCallback((time) => {
     toast.warning('الرجاء تعبئة جميع الحقول!');
     return;
   }
-  if (isNaN(appointmentMoment.toDate().getTime())) {
-    toast.error('الوقت المحدد غير صحيح');
-    return;
-  }
+
   try {
     // تحويل الوقت إلى تنسيق 24 ساعة
-      const time24 = convertTo24HourFormat(selectedTime);
-      const [hours, minutes] = time24.split(':').map(Number);
+    const time24 = convertTo24HourFormat(selectedTime);
+    const [hours, minutes] = time24.split(':').map(Number);
 
-      // إنشاء الموعد باستخدام moment مع التحقق من الصحة
-      const appointmentMoment = moment(selectedDate)
-        .set({ hour: hours, minute: minutes })
-        .tz('Asia/Jerusalem', true);
+    // إنشاء الموعد باستخدام moment مع التحقق من الصحة
+    const appointmentMoment = moment(selectedDate)
+      .set({ hour: hours, minute: minutes })
+      .tz('Asia/Jerusalem', true);
 
-      if (!appointmentMoment.isValid()) {
-        toast.error('الوقت المحدد غير صحيح');
-        return;
-      }
+    // التحقق من صحة التاريخ بعد الإنشاء
+    if (!appointmentMoment.isValid() || isNaN(appointmentMoment.toDate().getTime())) {
+      toast.error('الوقت المحدد غير صحيح');
+      return;
+    }
 
     // الوقت الحالي بتوقيت إسرائيل
     const now = moment().tz('Asia/Jerusalem');
@@ -362,16 +362,16 @@ const isTimeAvailable = useCallback((time) => {
     const appointmentsRef = ref(database, 'appointments');
     const newAppointmentRef = push(appointmentsRef);
     
-      const appointmentData = {
-        customerName,
-        phoneNumber: phoneNumber.replace(/\D/g, '').replace(/^0/, ''),
-        service: selectedService,
-        date: appointmentMoment.toISOString(),
-        time: selectedTime,
-        createdAt: moment().toISOString(),
-        status: 'pending',
-        timezone: 'Asia/Jerusalem'
-      };
+    const appointmentData = {
+      customerName,
+      phoneNumber: phoneNumber.replace(/\D/g, '').replace(/^0/, ''),
+      service: selectedService,
+      date: appointmentMoment.toISOString(),
+      time: selectedTime,
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+      timezone: 'Asia/Jerusalem' // إضافة المنطقة الزمنية
+    };
 
     await set(newAppointmentRef, appointmentData);
 
@@ -499,75 +499,55 @@ if (timeUntilAppointment > 0) {
     <label htmlFor="time" className="text-base font-semibold">اختار الوقت</label>
   </div>
   <div className="grid grid-cols-2 gap-3">
-    {availableTimes.map((time, index) => {
-  const isBooked = isTimeBooked(time);
-  const isAvailable = isTimeAvailable(time);
-  const isDisabled = isBooked || !isAvailable;
-
-  // البحث عن الحجز المطابق - الإصدار المصحح
-  const appointment = Object.values(bookedAppointments).find(appt => {
-    if (!appt || appt.status === 'cancelled') return false;
-    
-    // تحويل التواريخ باستخدام moment مع التحقق من الصحة
-    const apptMoment = moment(appt.date);
-    const selectedMoment = moment(selectedDate);
-    
-    if (!apptMoment.isValid() || !selectedMoment.isValid()) return false;
-    
-    // المقارنة بين التواريخ والأوقات
-    return (
-      apptMoment.isSame(selectedMoment, 'day') &&
-      convertTo24HourFormat(appt.time) === convertTo24HourFormat(time)
-    );
-  });
-
-  return (
-    <button
-      key={index}
-      onClick={() => !isDisabled && setSelectedTime(time)}
-      disabled={isDisabled}
-      className={`py-2 px-3 rounded-lg transition-all ${
-        selectedTime === time
-          ? 'bg-gradient-to-br from-purple-500 to-blue-500 text-white'
-          : isDisabled
-            ? 'bg-red-100 text-red-600 cursor-not-allowed border border-red-300'
-            : 'bg-gray-100 text-gray-700 hover:bg-purple-100'
-      }`}
-      title={isDisabled ? (isBooked ? 'محجوز' : 'غير متاح') : 'متاح'}
-    >
-      {time}
-      {isDisabled && (
-        <span className="text-xs block mt-1">
-          {isBooked ? '(محجوز)' : '(غير متاح)'}
-        </span>
-      )}
-    </button>
-  );
-})}
-
-      return (
-<button
-  key={index}
-  onClick={() => !isDisabled && setSelectedTime(time)}
-  disabled={isDisabled}
-  className={`py-2 px-3 rounded-lg transition-all ${
-    selectedTime === time
-      ? 'bg-gradient-to-br from-purple-500 to-blue-500 text-white'
-      : isDisabled
-        ? 'bg-red-100 text-red-600 cursor-not-allowed border border-red-300'
-        : 'bg-gray-100 text-gray-700 hover:bg-purple-100'
-  }`}
-  title={isDisabled ? (isBooked ? 'محجوز' : 'غير متاح') : 'متاح'}
->
-  {time}
-  {isDisabled && (
-    <span className="text-xs block mt-1">
-      {isBooked ? '(محجوز)' : '(غير متاح)'}
-    </span>
-  )}
-</button>
-      );
-    })}
+         {availableTimes.map((time, index) => {
+           // 1. تعريف المتغيرات الأساسية أولًا
+           const isBooked = isTimeBooked(time);
+           const isAvailable = isTimeAvailable(time);
+           const isDisabled = isBooked || !isAvailable; // <-- هنا كان الخطأ الأساسي
+         
+           // 2. التحقق من وجود التاريخ المحدد
+           if (!selectedDate) return null;
+         
+           // 3. البحث عن الحجز المطابق (محدث)
+           const appointment = Object.values(bookedAppointments).find(appt => {
+             if (!appt || appt.status === 'cancelled') return false;
+             
+             try {
+               const apptMoment = moment(appt.date);
+               const selectedMoment = moment(selectedDate);
+               
+               if (!apptMoment.isValid() || !selectedMoment.isValid()) return false;
+               
+               const timeMatch = convertTo24HourFormat(appt.time) === convertTo24HourFormat(time);
+               return apptMoment.isSame(selectedMoment, 'day') && timeMatch;
+             } catch {
+               return false;
+             }
+           });
+         
+           return (
+             <button
+               key={index}
+               onClick={() => !isDisabled && setSelectedTime(time)}
+               disabled={isDisabled}
+               className={`py-2 px-3 rounded-lg transition-all ${
+                 selectedTime === time
+                   ? 'bg-gradient-to-br from-purple-500 to-blue-500 text-white'
+                   : isDisabled
+                     ? 'bg-red-100 text-red-600 cursor-not-allowed border border-red-300'
+                     : 'bg-gray-100 text-gray-700 hover:bg-purple-100'
+               }`}
+               title={isDisabled ? (isBooked ? 'محجوز' : 'غير متاح') : 'متاح'}
+             >
+               {time}
+               {isDisabled && (
+                 <span className="text-xs block mt-1">
+                   {isBooked ? '(محجوز)' : '(غير متاح)'}
+                 </span>
+               )}
+             </button>
+           );
+         })}
   </div>
 </div>
 
