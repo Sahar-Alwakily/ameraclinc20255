@@ -168,22 +168,18 @@ const handleDateChange = (date) => {
     if (!selectedDate) return false;
     if (isNaN(selectedDate.getTime())) return false;
 
-    // تحويل التاريخ المحدد إلى توقيت إسرائيل
-    const userDate = new Date(selectedDate);
-    userDate.setHours(0, 0, 0, 0);
-    
-    const timeStr = convertTo24HourFormat(time);
-  
+    // التحقق من صحة تاريخ الحجز
     return Object.values(bookedAppointments).some(appointment => {
       if (!appointment || appointment.status === 'cancelled') return false;
       
-      // تحويل تاريخ الحجز من UTC إلى توقيت إسرائيل
-      const apptDate = new Date(appointment.date);
-      apptDate.setMinutes(apptDate.getMinutes() + apptDate.getTimezoneOffset());
+      const apptMoment = moment(appointment.date);
+      if (!apptMoment.isValid()) return false;
+      
+      const userMoment = moment(selectedDate).startOf('day');
       
       return (
-        apptDate.toDateString() === userDate.toDateString() &&
-        convertTo24HourFormat(appointment.time) === timeStr
+        apptMoment.isSame(userMoment, 'day') &&
+        convertTo24HourFormat(appointment.time) === convertTo24HourFormat(time)
       );
     });
   }, [selectedDate, bookedAppointments]);
@@ -191,30 +187,13 @@ const handleDateChange = (date) => {
   // دالة مساعدة لتحويل الوقت من 12 ساعة إلى 24 ساعة
   const convertTo24HourFormat = (time12h) => {
     if (!time12h) return '';
-    const timeRegex = /(\d{1,2}):(\d{2})\s(صباحًا|مساءً)/;
-    if (!timeRegex.test(time12h)) return '';
-    // إذا كان التنسيق يحتوي على AM/PM بالفعل (مثل البيانات القديمة)
-    if (time12h.includes('AM') || time12h.includes('PM')) {
-      const [time, period] = time12h.split(' ');
-      const [hours, minutes] = time.split(':').map(Number);
-      let hours24 = hours;
-      if (period === 'PM' && hours < 12) hours24 += 12;
-      if (period === 'AM' && hours === 12) hours24 = 0;
-      return `${hours24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    try {
+      const time = moment(time12h, 'h:mm A', 'ar');
+      if (!time.isValid()) return '';
+      return time.format('HH:mm:ss');
+    } catch {
+      return '';
     }
-  
-    // معالجة التنسيق العربي (صباحًا/مساءً)
-    const [time, period] = time12h.split(' ');
-    const [hours, minutes] = time.split(':').map(Number);
-    
-    let hours24 = hours;
-    if (period === 'مساءً') {
-      hours24 = hours === 12 ? 12 : hours + 12;
-    } else { // صباحًا
-      hours24 = hours === 12 ? 0 : hours;
-    }
-    
-     return `${hours24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
   };
 
 const isTimeAvailable = useCallback((time) => {
@@ -300,9 +279,9 @@ const isTimeAvailable = useCallback((time) => {
 
 
   const checkTimeAvailability = async (date, time) => {
-    const dateStr = date.toISOString().split('T')[0];
     const timeStr = convertTo24HourFormat(time);
-  
+    const dateMoment = moment(date).startOf('day');
+
     const appointmentsRef = ref(database, 'appointments');
     const snapshot = await get(appointmentsRef);
     
@@ -310,16 +289,18 @@ const isTimeAvailable = useCallback((time) => {
       const appointments = snapshot.val();
       const isBooked = Object.values(appointments).some(appt => {
         if (!appt || appt.status === 'cancelled') return false;
-        const apptDate = new Date(appt.date).toISOString().split('T')[0];
-        const apptTime = convertTo24HourFormat(appt.time);
-        return apptDate === dateStr && apptTime === timeStr;
+        const apptMoment = moment(appt.date);
+        return (
+          apptMoment.isSame(dateMoment, 'day') &&
+          convertTo24HourFormat(appt.time) === timeStr
+        );
       });
-  
+
       if (isBooked) {
         return { available: false, message: 'هذا الوقت محجوز الآن، يرجى اختيار وقت آخر' };
       }
     }
-  
+
     return { available: true };
   };
 
@@ -336,19 +317,18 @@ const isTimeAvailable = useCallback((time) => {
   }
   try {
     // تحويل الوقت إلى تنسيق 24 ساعة
-    const time24 = convertTo24HourFormat(selectedTime);
-    const [hours, minutes] = time24.split(':').map(Number);
+      const time24 = convertTo24HourFormat(selectedTime);
+      const [hours, minutes] = time24.split(':').map(Number);
 
-    // إنشاء تاريخ الموعد بتوقيت إسرائيل
-    const appointmentMoment = moment(selectedDate)
-  .set({ hour: hours, minute: minutes })
-  .tz('Asia/Jerusalem', true);
+      // إنشاء الموعد باستخدام moment مع التحقق من الصحة
+      const appointmentMoment = moment(selectedDate)
+        .set({ hour: hours, minute: minutes })
+        .tz('Asia/Jerusalem', true);
 
-    // التحقق من صحة التاريخ
-    if (!appointmentMoment.isValid()) {
-      toast.error('الوقت المحدد غير صحيح');
-      return;
-    }
+      if (!appointmentMoment.isValid()) {
+        toast.error('الوقت المحدد غير صحيح');
+        return;
+      }
 
     // الوقت الحالي بتوقيت إسرائيل
     const now = moment().tz('Asia/Jerusalem');
@@ -382,16 +362,16 @@ const isTimeAvailable = useCallback((time) => {
     const appointmentsRef = ref(database, 'appointments');
     const newAppointmentRef = push(appointmentsRef);
     
-    const appointmentData = {
-      customerName,
-      phoneNumber: phoneNumber.replace(/\D/g, '').replace(/^0/, ''),
-      service: selectedService,
-      date: appointmentMoment.toISOString(),
-      time: selectedTime,
-      createdAt: new Date().toISOString(),
-      status: 'pending',
-      timezone: 'Asia/Jerusalem' // إضافة المنطقة الزمنية
-    };
+      const appointmentData = {
+        customerName,
+        phoneNumber: phoneNumber.replace(/\D/g, '').replace(/^0/, ''),
+        service: selectedService,
+        date: appointmentMoment.toISOString(),
+        time: selectedTime,
+        createdAt: moment().toISOString(),
+        status: 'pending',
+        timezone: 'Asia/Jerusalem'
+      };
 
     await set(newAppointmentRef, appointmentData);
 
@@ -520,20 +500,50 @@ if (timeUntilAppointment > 0) {
   </div>
   <div className="grid grid-cols-2 gap-3">
     {availableTimes.map((time, index) => {
-      const isBooked = isTimeBooked(time);
-      const isAvailable = isTimeAvailable(time);
-      const isDisabled = isBooked || !isAvailable;
-      
-      // البحث عن الحجز المطابق
-      const appointment = Object.values(bookedAppointments).find(appt => {
-        if (!appt || appt.status === 'cancelled') return false;
-        const apptDate = new Date(appt.date).toISOString().split('T')[0];
-        const currentDate = selectedDate?.toISOString().split('T')[0];
-        return (
-          apptDate === currentDate && 
-          convertTo24HourFormat(appt.time) === convertTo24HourFormat(time)
-        );
-      });
+  const isBooked = isTimeBooked(time);
+  const isAvailable = isTimeAvailable(time);
+  const isDisabled = isBooked || !isAvailable;
+
+  // البحث عن الحجز المطابق - الإصدار المصحح
+  const appointment = Object.values(bookedAppointments).find(appt => {
+    if (!appt || appt.status === 'cancelled') return false;
+    
+    // تحويل التواريخ باستخدام moment مع التحقق من الصحة
+    const apptMoment = moment(appt.date);
+    const selectedMoment = moment(selectedDate);
+    
+    if (!apptMoment.isValid() || !selectedMoment.isValid()) return false;
+    
+    // المقارنة بين التواريخ والأوقات
+    return (
+      apptMoment.isSame(selectedMoment, 'day') &&
+      convertTo24HourFormat(appt.time) === convertTo24HourFormat(time)
+    );
+  });
+
+  return (
+    <button
+      key={index}
+      onClick={() => !isDisabled && setSelectedTime(time)}
+      disabled={isDisabled}
+      className={`py-2 px-3 rounded-lg transition-all ${
+        selectedTime === time
+          ? 'bg-gradient-to-br from-purple-500 to-blue-500 text-white'
+          : isDisabled
+            ? 'bg-red-100 text-red-600 cursor-not-allowed border border-red-300'
+            : 'bg-gray-100 text-gray-700 hover:bg-purple-100'
+      }`}
+      title={isDisabled ? (isBooked ? 'محجوز' : 'غير متاح') : 'متاح'}
+    >
+      {time}
+      {isDisabled && (
+        <span className="text-xs block mt-1">
+          {isBooked ? '(محجوز)' : '(غير متاح)'}
+        </span>
+      )}
+    </button>
+  );
+})}
 
       return (
 <button
