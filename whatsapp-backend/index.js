@@ -218,14 +218,15 @@ app.post('/api/whatsapp-webhook', async (req, res) => {
     const appointmentId = Object.keys(appointmentsData)[0];
     const appointmentData = appointmentsData[appointmentId];
 
-if (req.body.ButtonPayload === 'confirmed') {
-      // تحديث حالة الموعد
-      await update(appointmentsRef, {
+    if (req.body.ButtonPayload === 'confirmed') {
+      // تحديث حالة الموعد في العقدة الصحيحة
+      const specificAppointmentRef = ref(database, `appointments/${appointmentId}`);
+      await update(specificAppointmentRef, {
         status: 'confirmed',
         confirmedAt: new Date().toISOString()
       });
 
-      // إرسال الرد باستخدام القالب المحدد
+      // إرسال الرد
       await client.messages.create({
         contentSid: 'HX1497f9f86940632a3cc4571dc764016d',
         from: 'whatsapp:+972545380785',
@@ -237,10 +238,12 @@ if (req.body.ButtonPayload === 'confirmed') {
       });
     } 
     else if (req.body.ButtonPayload === 'rescheduled') {
-        await update(appointmentsRef, {
-    status: 'rescheduled',
-    rescheduledAt: new Date().toISOString()
-  });
+      const specificAppointmentRef = ref(database, `appointments/${appointmentId}`);
+      await update(specificAppointmentRef, {
+        status: 'rescheduled',
+        rescheduledAt: new Date().toISOString()
+      });
+      
       await client.messages.create({
         contentSid: 'HXef7215391ae4a15e77ac83d855c37980',
         from: 'whatsapp:+972545380785',

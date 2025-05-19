@@ -198,7 +198,7 @@ const convertTo24HourFormat = (timeStr) => {
   return time.isValid() ? time.format('HH:mm:ss') : '';
 };
 
-const isTimeAvailable = useCallback((time) => {
+const isTimeAvailable = useCallback((time ) => {
   if (!selectedDate || !scheduleSettings) return true;
 
   // 1. التحقق من الأجازات
