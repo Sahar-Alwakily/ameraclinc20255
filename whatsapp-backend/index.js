@@ -199,7 +199,19 @@ app.post('/api/send-whatsapp', async (req, res) => {
 app.post('/api/whatsapp-webhook', async (req, res) => {
   try {
     const userPhone = req.body.From.replace(/\D/g, '').replace(/^972/, '');
-    
+    if (!req.body.ButtonPayload) {
+      // إرسال الرد التلقائي باستخدام القالب المحدد
+      await client.messages.create({
+        contentSid: 'HXb71c8abd97ff494ff7cf8ba5bf9320e5',
+        from: 'whatsapp:+972545380785',
+        to: req.body.From,
+        contentVariables: JSON.stringify({
+          customerName: 'عزيزتي '
+        })
+      });
+      
+      return res.type('xml').send('<Response></Response>');
+    }
     const appointmentsRef = ref(database, 'appointments');
     const q = query(
       appointmentsRef,

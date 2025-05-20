@@ -165,24 +165,27 @@ const handleDateChange = (date) => {
   };
 
   const isTimeBooked = useCallback((time) => {
-    if (!selectedDate) return false;
-    if (isNaN(selectedDate.getTime())) return false;
+  if (!selectedDate) return false;
+  if (isNaN(selectedDate.getTime())) return false;
 
-    // التحقق من صحة تاريخ الحجز
-    return Object.values(bookedAppointments).some(appointment => {
-      if (!appointment || appointment.status === 'cancelled') return false;
-      
-      const apptMoment = moment(appointment.date);
-      if (!apptMoment.isValid()) return false;
-      
-      const userMoment = moment(selectedDate).startOf('day');
-      
-      return (
-        apptMoment.isSame(userMoment, 'day') &&
-        convertTo24HourFormat(appointment.time) === convertTo24HourFormat(time)
-      );
-    });
-  }, [selectedDate, bookedAppointments]);
+  return Object.values(bookedAppointments).some(appointment => {
+    if (!appointment) return false;
+    
+    // التعديل هنا: نتحقق من أن الحالة إما pending أو confirmed
+    const validStatus = ['pending', 'confirmed'].includes(appointment.status);
+    if (!validStatus) return false;
+    
+    const apptMoment = moment(appointment.date);
+    if (!apptMoment.isValid()) return false;
+    
+    const userMoment = moment(selectedDate).startOf('day');
+    
+    return (
+      apptMoment.isSame(userMoment, 'day') &&
+      convertTo24HourFormat(appointment.time) === convertTo24HourFormat(time)
+    );
+  });
+}, [selectedDate, bookedAppointments]);
   
   // دالة مساعدة لتحويل الوقت من 12 ساعة إلى 24 ساعة
 const convertTo24HourFormat = (timeStr) => {
@@ -280,31 +283,36 @@ const isTimeAvailable = useCallback((time ) => {
   };
 
 
-  const checkTimeAvailability = async (date, time) => {
-    const timeStr = convertTo24HourFormat(time);
-    const dateMoment = moment(date).startOf('day');
+const checkTimeAvailability = async (date, time) => {
+  const timeStr = convertTo24HourFormat(time);
+  const dateMoment = moment(date).startOf('day');
 
-    const appointmentsRef = ref(database, 'appointments');
-    const snapshot = await get(appointmentsRef);
-    
-    if (snapshot.exists()) {
-      const appointments = snapshot.val();
-      const isBooked = Object.values(appointments).some(appt => {
-        if (!appt || appt.status === 'cancelled') return false;
-        const apptMoment = moment(appt.date);
-        return (
-          apptMoment.isSame(dateMoment, 'day') &&
-          convertTo24HourFormat(appt.time) === timeStr
-        );
-      });
+  const appointmentsRef = ref(database, 'appointments');
+  const snapshot = await get(appointmentsRef);
+  
+  if (snapshot.exists()) {
+    const appointments = snapshot.val();
+    const isBooked = Object.values(appointments).some(appt => {
+      if (!appt) return false;
+      
+      // التعديل هنا: نتحقق من الحالات المطلوبة فقط
+      const validStatus = ['pending', 'confirmed'].includes(appt.status);
+      if (!validStatus) return false;
+      
+      const apptMoment = moment(appt.date);
+      return (
+        apptMoment.isSame(dateMoment, 'day') &&
+        convertTo24HourFormat(appt.time) === timeStr
+      );
+    });
 
-      if (isBooked) {
-        return { available: false, message: 'هذا الوقت محجوز الآن، يرجى اختيار وقت آخر' };
-      }
+    if (isBooked) {
+      return { available: false, message: 'هذا الوقت محجوز الآن، يرجى اختيار وقت آخر' };
     }
+  }
 
-    return { available: true };
-  };
+  return { available: true };
+};
 
   
   const handleSubmit = async () => {
