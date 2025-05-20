@@ -37,65 +37,78 @@ const AllAppointments = () => {
   });
   const [newHoliday, setNewHoliday] = useState(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        
-        // جلب إعدادات الجدول
-        const settingsSnapshot = await get(ref(database, 'scheduleSettings'));
-        if (settingsSnapshot.exists()) {
-          const settings = settingsSnapshot.val();
-          setScheduleSettings(settings);
-          setTempSettings({
-            startHour: settings.startHour || 9,
-            endHour: settings.endHour || 15,
-            holidays: settings.holidays || [],
-            workingDays: settings.workingDays || [0, 1, 2, 3, 4, 5, 6]
-          });
-          
-          // توليد الوقت بناء على الإعدادات
-          const slots = generateTimeSlots(settings.startHour || 9, settings.endHour || 15);
-          setTimeSlots(slots);
-        }
-
-        // جلب الحجوزات
-        const appointmentsSnapshot = await get(ref(database, 'appointments'));
-        if (appointmentsSnapshot.exists()) {
-        const bookingsData = Object.entries(appointmentsSnapshot.val()).map(([id, booking]) => {
-  // التحقق من صحة التاريخ قبل التحويل
-              const isValidDate = moment(booking.date).isValid();
   
-             return {
-                id,
-                name: booking.customerName,
-                phone: `+972${booking.phoneNumber}`,
-                date: isValidDate ? 
-                  moment(booking.date).format('YYYY-MM-DD') : 
-                  'تاريخ غير صالح',
-                time: convertTo12HourFormat(booking.time),
-                service: booking.service,
-                status: booking.status || "pending",
-                confirmedAt: booking.confirmedAt || null,
-                cancelledAt: booking.cancelledAt || null,
-                createdAt: booking.createdAt
-              };
-            });
-          
-          setBookings(bookingsData);
-          setFilteredBookings(bookingsData);
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        toast.error("حدث خطأ أثناء جلب البيانات");
-      } finally {
-        setLoading(false);
+useEffect(() => {
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      
+      // جلب إعدادات الجدول
+      const settingsSnapshot = await get(ref(database, 'scheduleSettings'));
+      if (settingsSnapshot.exists()) {
+        const settings = settingsSnapshot.val();
+        setScheduleSettings(settings);
+        setTempSettings({
+          startHour: settings.startHour || 9,
+          endHour: settings.endHour || 15,
+          holidays: settings.holidays || [],
+          workingDays: settings.workingDays || [0, 1, 2, 3, 4, 5, 6]
+        });
+        
+        const slots = generateTimeSlots(settings.startHour || 9, settings.endHour || 15);
+        setTimeSlots(slots);
       }
-    };
 
-    fetchData();
-  }, []);
+      // جلب الحجوزات
+      const appointmentsSnapshot = await get(ref(database, 'appointments'));
+      if (appointmentsSnapshot.exists()) {
+        const now = moment(); // الوقت الحالي
+        
+        const bookingsData = Object.entries(appointmentsSnapshot.val())
+          .map(([id, booking]) => {
+            const isValidDate = moment(booking.date).isValid();
+            const bookingDate = moment(booking.date);
+            
+            // إضافة اسم اليوم بالعربية
+            const dateWithDay = isValidDate ? 
+              `${bookingDate.format('YYYY-MM-DD')} (${bookingDate.format('dddd')})` : 
+              'تاريخ غير صالح';
+            
+            return {
+              id,
+              name: booking.customerName,
+              phone: `+972${booking.phoneNumber}`,
+              date: dateWithDay,
+              time: convertTo12HourFormat(booking.time),
+              service: booking.service,
+              status: booking.status || "pending",
+              timestamp: bookingDate.valueOf(),
+              rawTime: booking.time,
+              isToday: bookingDate.isSame(now, 'day'), // تحديد إذا كان الموعد اليوم
+              isFuture: bookingDate.isAfter(now) // تحديد إذا كان الموعد في المستقبل
+            };
+          })
+          .filter(booking => booking.isToday || booking.isFuture) // تصفية المواعيد الماضية
+          .sort((a, b) => {
+            // الترتيب: اليوم أولاً، ثم المستقبل حسب التاريخ
+            if (a.isToday && !b.isToday) return -1;
+            if (!a.isToday && b.isToday) return 1;
+            return a.timestamp - b.timestamp;
+          });
+        
+        setBookings(bookingsData);
+        setFilteredBookings(bookingsData);
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast.error("حدث خطأ أثناء جلب البيانات");
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  fetchData();
+}, []);
   useEffect(() => {
     if (statusFilter === "all") {
       setFilteredBookings(bookings);
@@ -421,6 +434,7 @@ const convertTo12HourFormat = (time) => {
                 </thead>
                 <tbody>
                   {filteredBookings.map(booking => (
+                    
                     <tr 
                       key={booking.id} 
                       className="hover:bg-gray-50 cursor-pointer"

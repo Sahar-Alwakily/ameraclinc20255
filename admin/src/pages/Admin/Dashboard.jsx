@@ -99,28 +99,40 @@ const Dashboard = () => {
         }).reverse();
     }, [orders]);
 
-    const filteredAppointments = useMemo(() => {
-        const today = new Date().toLocaleDateString('en-US');
-        return (appointments || []) // تحقق من undefined
-            .filter(app => 
-                app.date === today &&
-                (
-                    app.customerName?.includes(searchTerm) || 
-                    app.service?.includes(searchTerm) || 
-                    app.phoneNumber?.includes(searchTerm)
-                )
-            )
-            .sort((a, b) => {
-                const getTimeValue = (timeStr) => {
-                    const [time, period] = timeStr.split(' ');
-                    let [hours, minutes] = time.split(':').map(Number);
-                    if (period === 'مساءً' && hours !== 12) hours += 12;
-                    if (period === 'صباحًا' && hours === 12) hours = 0;
-                    return hours * 60 + minutes;
-                };
-                return getTimeValue(a.time) - getTimeValue(b.time);
-            });
-    }, [appointments, searchTerm]);
+const filteredAppointments = useMemo(() => {
+    const today = new Date().toLocaleDateString('en-US');
+    const currentTime = new Date();
+    
+    // دالة لتحويل الوقت العربي إلى دقائق منذ منتصف الليل
+    const getTimeValue = (timeStr) => {
+        const [time, period] = timeStr.split(' ');
+        let [hours, minutes] = time.split(':').map(Number);
+        
+        // التحويل إلى تنسيق 24 ساعة
+        if (period === 'مساءً' && hours !== 12) hours += 12;
+        if (period === 'صباحًا' && hours === 12) hours = 0;
+        
+        return hours * 60 + minutes;
+    };
+
+    return (appointments || [])
+        .filter(app => {
+            const appDate = new Date(app.date);
+            const isToday = app.date === today;
+            
+            // حساب الوقت الحالي بالدقائق
+            const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+            const appMinutes = getTimeValue(app.time);
+            
+            return isToday && appMinutes >= currentMinutes; // المواعيد المستقبلية فقط
+        })
+        .sort((a, b) => getTimeValue(a.time) - getTimeValue(b.time)) // الترتيب تصاعدي
+        .filter(app => 
+            app.customerName?.includes(searchTerm) || 
+            app.service?.includes(searchTerm) || 
+            app.phoneNumber?.includes(searchTerm)
+        );
+}, [appointments, searchTerm]);
 
     if (loading) {
         return (
@@ -174,11 +186,17 @@ const Dashboard = () => {
                                         <td className="p-3">
                                             <span className={`px-2 py-1 rounded-full text-xs ${
                                                 app.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                                                app.status === 'rescheduled' ? 'bg-blue-100 text-blue-800' :
                                                 app.status === 'cancelled' ? 'bg-red-100 text-red-800' : 
                                                 'bg-yellow-100 text-yellow-800'
                                             }`}>
-                                                {app.status === 'confirmed' ? 'مؤكد' : 
-                                                 app.status === 'cancelled' ? 'ملغي' : 'بانتظار'}
+                                                {
+                                                  app.status === 'confirmed' ? 'مؤكد' 
+                                                    : app.status === 'cancelled' ? 'ملغي'
+                                                    : app.status === 'rescheduled' ? 'إعادة الجدولة'
+                                                    : app.status === 'pending' ? 'بأنتظار التاكيد'
+                                                    : 'حالة غير معروفة'
+                                                }
                                             </span>
                                         </td>
                                     </tr>

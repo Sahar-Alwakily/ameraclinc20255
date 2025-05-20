@@ -232,7 +232,7 @@ app.post('/api/whatsapp-webhook', async (req, res) => {
         from: 'whatsapp:+972545380785',
         to: req.body.From,
         contentVariables: JSON.stringify({
-          selectedDate: appointmentData.date,
+          selectedDate: new Date(appointmentData.date).toISOString().split('T')[0],
           selectedTime: appointmentData.time
         })
       });
@@ -249,7 +249,7 @@ app.post('/api/whatsapp-webhook', async (req, res) => {
         from: 'whatsapp:+972545380785',
         to: req.body.From,
         contentVariables: JSON.stringify({
-          selectedDate: appointmentData.date,
+          selectedDate: new Date(appointmentData.date).toISOString().split('T')[0],
           selectedTime: appointmentData.time
         })
       });
