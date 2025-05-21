@@ -245,21 +245,23 @@ const isTimeAvailable = useCallback((time ) => {
   return true;
 }, [selectedDate, scheduleSettings, currentTime]);
 
-  const isDateDisabled = ({ date }) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const adjustedDate = new Date(date);
-    adjustedDate.setHours(0, 0, 0, 0);
+const isDateDisabled = ({ date }) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const adjustedDate = new Date(date);
+  adjustedDate.setHours(0, 0, 0, 0);
 
-    // التحقق من الأجازات
-    if (scheduleSettings?.holidays) {
-      const dateStr = date.toISOString().split('T')[0];
-      if (scheduleSettings.holidays.includes(dateStr)) {
-        return true;
-      }
-    }
+  // التحقق من الأجازات مع تعديل المنطقة الزمنية
+  if (scheduleSettings?.holidays) {
+    const dateStr = moment(date)
+      .tz('Asia/Jerusalem')
+      .format('YYYY-MM-DD');
     
+    if (scheduleSettings.holidays.includes(dateStr)) {
+      return true;
+    }
+  }
     // التحقق من أيام العمل
     if (scheduleSettings?.workingDays) {
       const dayOfWeek = date.getDay();
