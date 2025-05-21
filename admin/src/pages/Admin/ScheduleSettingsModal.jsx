@@ -84,15 +84,19 @@ const ScheduleSettingsModal = ({
     }));
   };
 
-  const handleAddHoliday = () => {
-    if (!newHoliday) return;
-    const dateStr = newHoliday.toISOString().split('T')[0];
-    setSettings(prev => ({
-      ...prev,
-      holidays: [...new Set([...prev.holidays, dateStr])]
-    }));
-    setNewHoliday(null);
-  };
+const handleAddHoliday = () => {
+  if (!newHoliday) return;
+  
+  // تحويل التاريخ إلى توقيت إسرائيل المحلي (UTC+2/UTC+3)
+  const adjustedDate = new Date(newHoliday.getTime() - (newHoliday.getTimezoneOffset() * 60000));
+  const dateStr = adjustedDate.toISOString().split('T')[0];
+  
+  setSettings(prev => ({
+    ...prev,
+    holidays: [...new Set([...prev.holidays, dateStr])]
+  }));
+  setNewHoliday(null);
+};
 
 const handleSave = async () => {
   try {
@@ -196,20 +200,28 @@ const handleSave = async () => {
                   <p className="text-gray-500 text-center">لا توجد أيام إجازة مضافة</p>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
-                    {settings.holidays.map((date, index) => (
-                      <div key={index} className="flex items-center justify-between bg-white p-2 rounded">
-                        <span>{new Date(date).toLocaleDateString('ar-EG')}</span>
-                        <button
-                          onClick={() => setSettings(prev => ({
-                            ...prev,
-                            holidays: prev.holidays.filter(d => d !== date)
-                          }))}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <FaTimes />
-                        </button>
-                      </div>
-                    ))}
+{settings.holidays.map((date, index) => (
+  <div key={index} className="flex items-center justify-between bg-white p-2 rounded">
+    <span>
+      {new Date(date + 'T00:00:00+03:00') // إضافة إزاحة التوقيت الصيفي الإسرائيلي (UTC+3)
+        .toLocaleDateString('ar-IL', {
+          timeZone: 'Asia/Jerusalem',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        })}
+    </span>
+    <button
+      onClick={() => setSettings(prev => ({
+        ...prev,
+        holidays: prev.holidays.filter(d => d !== date)
+      }))}
+      className="text-red-500 hover:text-red-700"
+    >
+      <FaTimes />
+    </button>
+  </div>
+))}
                   </div>
                 )}
               </div>
