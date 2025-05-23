@@ -107,18 +107,104 @@ const generateAvailableTimes = useCallback((settings, date) => {
   const endHour = settings[`day_${day}_end`] || 17;
   
   const times = [];
+  // توليد كل ساعة كاملة من البداية للنهاية
   for (let hour = startHour; hour < endHour; hour++) {
     const period = hour < 12 ? 'صباحًا' : 'مساءً';
-    const displayHour = hour > 12 ? hour - 12 : hour;
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
     
-    // إضافة الوقت على شكل 00 و 30 دقيقة
+    // إضافة الوقت الأساسي (مثال: 1:00 مساءً)
     times.push(`${displayHour}:00 ${period}`);
-    if (hour !== endHour) {
+    
+    // إضافة 30 دقيقة فقط إذا لم تكن الساعة الأخيرة
+    if (hour < endHour) {
       times.push(`${displayHour}:30 ${period}`);
     }
   }
   setAvailableTimes(times);
 }, []);
+
+const isTimeAvailable = useCallback((time) => {
+  if (!selectedDate || !scheduleSettings) return true;
+  
+  const dateStr = moment(selectedDate).tz('Asia/Jerusalem').format('YYYY-MM-DD');
+  if (scheduleSettings.holidays?.includes(dateStr)) return false;
+  
+  const dayOfWeek = selectedDate.getDay();
+  if (!scheduleSettings.workingDays?.includes(dayOfWeek)) return false;
+  
+  // تحسين تحويل الوقت إلى تنسيق 24 ساعة
+  const timeStr = time.trim();
+  const isPM = timeStr.includes('مساءً');
+  const timeComponents = timeStr.replace('صباحًا', '').replace('مساءً', '').trim().split(':');
+  let hours = parseInt(timeComponents[0], 10);
+  const minutes = parseInt(timeComponents[1] || '0', 10);
+  
+  // تحويل الوقت بشكل صحيح
+  if (isPM && hours !== 12) {
+    hours += 12;
+  } else if (!isPM && hours === 12) {
+    hours = 0;
+  }
+  
+  const startHour = scheduleSettings[`day_${dayOfWeek}_start`] || 9;
+  const endHour = scheduleSettings[`day_${dayOfWeek}_end`] || 17;
+  
+  // التحقق من أن الوقت ضمن ساعات العمل
+  if (hours < startHour || hours > endHour) return false;
+  
+  // التحقق من الوقت الحالي
+  const now = moment().tz('Asia/Jerusalem');
+  if (moment(selectedDate).isSame(now, 'day')) {
+    const currentHour = now.hours();
+    const currentMinute = now.minutes();
+    
+    // مقارنة الوقت المحدد مع الوقت الحالي
+    if (hours < currentHour || (hours === currentHour && minutes <= currentMinute)) {
+      return false;
+    }
+  }
+  
+  return true;
+}, [selectedDate, scheduleSettings, currentTime]);
+
+
+
+const convertTo24HourFormat = (timeStr) => {
+  if (!timeStr) return '';
+  
+  // تحويل النص العربي إلى تنسيق يفهمه moment
+  const normalizedTime = timeStr
+    .replace('صباحًا', 'AM')
+    .replace('مساءً', 'PM')
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+  
+  const time = moment(normalizedTime, 'h:mm A');
+  if (!time.isValid()) return '';
+  
+  // تحويل الوقت بشكل صحيح إلى تنسيق 24 ساعة
+  return time.format('HH:mm:00');
+};
+// 2. دالة التحقق من الحجز (مُحدَّثة)
+const isTimeBooked = useCallback((time) => {
+  if (!selectedDate) return false;
+  
+  return Object.values(bookedAppointments).some(appointment => {
+    if (!appointment || !['pending', 'confirmed'].includes(appointment.status)) return false;
+    
+    const apptMoment = moment(appointment.date).tz('Asia/Jerusalem');
+    const selectedMoment = moment(selectedDate).tz('Asia/Jerusalem').startOf('day');
+    const timeMoment = moment(time, 'h:mm A');
+    
+    // التحقق من التطابق الدقيق للوقت
+    return (
+      apptMoment.isSame(selectedMoment, 'day') &&
+      apptMoment.format('HH:mm') === timeMoment.format('HH:mm')
+    );
+  });
+}, [selectedDate, bookedAppointments]);
+
+
+
 
 // 3. تحديث الأوقات عند تغيير التاريخ أو الإعدادات
 useEffect(() => {
@@ -164,86 +250,9 @@ const handleDateChange = (date) => {
     setSelectedService(event.target.value);
   };
 
-  const isTimeBooked = useCallback((time) => {
-  if (!selectedDate) return false;
-  if (isNaN(selectedDate.getTime())) return false;
 
-  return Object.values(bookedAppointments).some(appointment => {
-    if (!appointment) return false;
-    
-    // التعديل هنا: نتحقق من أن الحالة إما pending أو confirmed
-    const validStatus = ['pending', 'confirmed'].includes(appointment.status);
-    if (!validStatus) return false;
-    
-    const apptMoment = moment(appointment.date);
-    if (!apptMoment.isValid()) return false;
-    
-    const userMoment = moment(selectedDate).startOf('day');
-    
-    return (
-      apptMoment.isSame(userMoment, 'day') &&
-      convertTo24HourFormat(appointment.time) === convertTo24HourFormat(time)
-    );
-  });
-}, [selectedDate, bookedAppointments]);
   
-  // دالة مساعدة لتحويل الوقت من 12 ساعة إلى 24 ساعة
-const convertTo24HourFormat = (timeStr) => {
-  if (!timeStr) return '';
-  
-  // معالجة التنسيقات العربية
-  const normalizedTime = timeStr
-    .replace('صباحًا', 'AM')
-    .replace('مساءً', 'PM')
-    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 
-  const time = moment(normalizedTime, 'h:mm A');
-  return time.isValid() ? time.format('HH:mm:ss') : '';
-};
-
-const isTimeAvailable = useCallback((time ) => {
-  if (!selectedDate || !scheduleSettings) return true;
-
-  // 1. التحقق من الأجازات
-  const dateStr = selectedDate.toISOString().split('T')[0];
-  if (scheduleSettings.holidays?.includes(dateStr)) {
-    return false;
-  }
-
-  // 2. التحقق من ساعات العمل اليومية
-  const dayOfWeek = selectedDate.getDay();
-  const startHour = scheduleSettings[`day_${dayOfWeek}_start`] || 9;
-  const endHour = scheduleSettings[`day_${dayOfWeek}_end`] || 17;
-
-  // تحويل الوقت المحدد إلى ساعة رقمية
-  const [timePart, period] = time.split(' ');
-  const [hours, minutes] = timePart.split(':').map(Number);
-  
-  let numericHour = hours;
-  if (period === 'مساءً') {
-    numericHour = hours === 12 ? 12 : hours + 12;
-  } else {
-    numericHour = hours === 12 ? 0 : hours;
-  }
-
-  // 3. التحقق من التوافق مع ساعات العمل
-  if (numericHour < startHour || numericHour > endHour) {
-    return false;
-  }
-
-  // 4. التحقق من الوقت الحالي إذا كان التاريخ هو اليوم
-  const today = new Date();
-  if (
-    selectedDate.getDate() === today.getDate() &&
-    selectedDate.getMonth() === today.getMonth() &&
-    selectedDate.getFullYear() === today.getFullYear()
-  ) {
-    if (numericHour < today.getHours()) return false;
-    if (numericHour === today.getHours() && minutes <= today.getMinutes()) return false;
-  }
-
-  return true;
-}, [selectedDate, scheduleSettings, currentTime]);
 
 const isDateDisabled = ({ date }) => {
   const today = new Date();
@@ -269,6 +278,11 @@ const isDateDisabled = ({ date }) => {
         return true;
       }
     }
+
+
+    
+
+
     
   return adjustedDate < today;
   };
