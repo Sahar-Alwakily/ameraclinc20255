@@ -167,24 +167,27 @@ const isTimeAvailable = useCallback((time) => {
   return true;
 }, [selectedDate, scheduleSettings, currentTime]);
 
-
-
+// تحسين دالة تحويل الوقت - إصلاح مشكلة AM/PM
 const convertTo24HourFormat = (timeStr) => {
   if (!timeStr) return '';
   
-  // تحويل النص العربي إلى تنسيق يفهمه moment
-  const normalizedTime = timeStr
-    .replace('صباحًا', 'AM')
-    .replace('مساءً', 'PM')
-    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
-  
-  const time = moment(normalizedTime, 'h:mm A');
-  if (!time.isValid()) return '';
+  // تحليل الوقت يدوياً للتأكد من معالجة AM/PM بشكل صحيح
+  const isPM = timeStr.includes('مساءً');
+  const timeComponents = timeStr.replace('صباحًا', '').replace('مساءً', '').trim().split(':');
+  let hours = parseInt(timeComponents[0], 10);
+  const minutes = parseInt(timeComponents[1] || '0', 10);
   
   // تحويل الوقت بشكل صحيح إلى تنسيق 24 ساعة
-  return time.format('HH:mm:00');
+  if (isPM && hours !== 12) {
+    hours += 12;
+  } else if (!isPM && hours === 12) {
+    hours = 0;
+  }
+  
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
 };
-// 2. دالة التحقق من الحجز (مُحدَّثة)
+
+// 2. دالة التحقق من الحجز (مُحدَّثة)
 const isTimeBooked = useCallback((time) => {
   if (!selectedDate) return false;
   
@@ -193,12 +196,24 @@ const isTimeBooked = useCallback((time) => {
     
     const apptMoment = moment(appointment.date).tz('Asia/Jerusalem');
     const selectedMoment = moment(selectedDate).tz('Asia/Jerusalem').startOf('day');
-    const timeMoment = moment(time, 'h:mm A');
+    
+    // استخدام نفس طريقة تحويل الوقت المستخدمة في convertTo24HourFormat
+    const isPM = time.includes('مساءً');
+    const timeComponents = time.replace('صباحًا', '').replace('مساءً', '').trim().split(':');
+    let hours = parseInt(timeComponents[0], 10);
+    const minutes = parseInt(timeComponents[1] || '0', 10);
+    
+    if (isPM && hours !== 12) {
+      hours += 12;
+    } else if (!isPM && hours === 12) {
+      hours = 0;
+    }
     
     // التحقق من التطابق الدقيق للوقت
     return (
       apptMoment.isSame(selectedMoment, 'day') &&
-      apptMoment.format('HH:mm') === timeMoment.format('HH:mm')
+      apptMoment.hours() === hours &&
+      apptMoment.minutes() === minutes
     );
   });
 }, [selectedDate, bookedAppointments]);
@@ -339,9 +354,18 @@ const checkTimeAvailability = async (date, time) => {
   }
 
   try {
-    // تحويل الوقت إلى تنسيق 24 ساعة
-    const time24 = convertTo24HourFormat(selectedTime);
-    const [hours, minutes] = time24.split(':').map(Number);
+    // تحليل الوقت المحدد للتأكد من معالجة AM/PM بشكل صحيح
+    const isPM = selectedTime.includes('مساءً');
+    const timeComponents = selectedTime.replace('صباحًا', '').replace('مساءً', '').trim().split(':');
+    let hours = parseInt(timeComponents[0], 10);
+    const minutes = parseInt(timeComponents[1] || '0', 10);
+    
+    // تحويل الوقت بشكل صحيح إلى تنسيق 24 ساعة
+    if (isPM && hours !== 12) {
+      hours += 12;
+    } else if (!isPM && hours === 12) {
+      hours = 0;
+    }
 
     // إنشاء الموعد باستخدام moment مع التحقق من الصحة
     const appointmentMoment = moment(selectedDate)
@@ -513,79 +537,21 @@ if (timeUntilAppointment > 0) {
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
                 className="w-full py-2 px-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                placeholder="أدخل رقم هاتفك (مثال: 0512345678)"
+                placeholder="أدخل رقم هاتفك"
+                dir="ltr"
               />
             </div>
 
-            <div className="time-picker mb-4">
-  <div className="flex items-center gap-2 mb-1 text-purple-900">
-    <FaClock className="text-lg" />
-    <label htmlFor="time" className="text-base font-semibold">اختار الوقت</label>
-  </div>
-  <div className="grid grid-cols-2 gap-3">
-         {availableTimes.map((time, index) => {
-           // 1. تعريف المتغيرات الأساسية أولًا
-           const isBooked = isTimeBooked(time);
-           const isAvailable = isTimeAvailable(time);
-           const isDisabled = isBooked || !isAvailable; // <-- هنا كان الخطأ الأساسي
-         
-           // 2. التحقق من وجود التاريخ المحدد
-           if (!selectedDate) return null;
-         
-           // 3. البحث عن الحجز المطابق (محدث)
-           const appointment = Object.values(bookedAppointments).find(appt => {
-             if (!appt || appt.status === 'cancelled') return false;
-             
-             try {
-               const apptMoment = moment(appt.date);
-               const selectedMoment = moment(selectedDate);
-               
-               if (!apptMoment.isValid() || !selectedMoment.isValid()) return false;
-               
-               const timeMatch = convertTo24HourFormat(appt.time) === convertTo24HourFormat(time);
-               return apptMoment.isSame(selectedMoment, 'day') && timeMatch;
-             } catch {
-               return false;
-             }
-           });
-         
-           return (
-             <button
-               key={index}
-               onClick={() => !isDisabled && setSelectedTime(time)}
-               disabled={isDisabled}
-               className={`py-2 px-3 rounded-lg transition-all ${
-                 selectedTime === time
-                   ? 'bg-gradient-to-br from-purple-500 to-blue-500 text-white'
-                   : isDisabled
-                     ? 'bg-red-100 text-red-600 cursor-not-allowed border border-red-300'
-                     : 'bg-gray-100 text-gray-700 hover:bg-purple-100'
-               }`}
-               title={isDisabled ? (isBooked ? 'محجوز' : 'غير متاح') : 'متاح'}
-             >
-               {time}
-               {isDisabled && (
-                 <span className="text-xs block mt-1">
-                   {isBooked ? '(محجوز)' : '(غير متاح)'}
-                 </span>
-               )}
-             </button>
-           );
-         })}
-  </div>
-</div>
-
-            <div className="service-select mb-4">
+            <div className="service-selection mb-4">
               <div className="flex items-center gap-2 mb-1 text-purple-900">
-                <FaCheck className="text-lg" />
-                <label htmlFor="service" className="text-base font-semibold">اختار الخدمة</label>
+                <FaInfoCircle className="text-lg" />
+                <label htmlFor="service" className="text-base font-semibold">اختر الخدمة</label>
               </div>
               <select
                 id="service"
                 value={selectedService}
                 onChange={handleServiceChange}
                 className="w-full py-2 px-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                disabled={loadingServices}
               >
                 <option value="">اختر الخدمة</option>
                 {services.map((service) => (
@@ -596,22 +562,47 @@ if (timeUntilAppointment > 0) {
               </select>
             </div>
 
+            {selectedDate && (
+              <div className="time-selection mb-4">
+                <div className="flex items-center gap-2 mb-1 text-purple-900">
+                  <FaClock className="text-lg" />
+                  <label className="text-base font-semibold">اختر الوقت</label>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {availableTimes.map((time, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => setSelectedTime(time)}
+                      disabled={!isTimeAvailable(time) || isTimeBooked(time)}
+                      className={`py-2 px-1 rounded-lg text-sm transition-all ${
+                        selectedTime === time
+                          ? 'bg-purple-600 text-white'
+                          : !isTimeAvailable(time) || isTimeBooked(time)
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                          : 'bg-purple-100 text-purple-800 hover:bg-purple-200'
+                      }`}
+                    >
+                      {time}
+                      {selectedTime === time && <FaCheck className="inline mr-1" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <button
+              type="button"
               onClick={handleSubmit}
-              disabled={isSubmitting}
-              className={`w-full py-2 bg-gradient-to-br from-purple-500 to-blue-500 text-white text-base font-semibold rounded-lg mt-4 transition-all hover:from-purple-600 hover:to-blue-600 flex items-center justify-center gap-2 ${
-                isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+              disabled={!selectedDate || !selectedTime || !selectedService || !customerName || !phoneNumber || isSubmitting}
+              className={`w-full py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all ${
+                !selectedDate || !selectedTime || !selectedService || !customerName || !phoneNumber || isSubmitting
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700'
               }`}
             >
-              {isSubmitting ? (
-                'جاري الحفظ...'
-              ) : (
-                <>
-                  <FaWhatsapp className="text-lg" />
-                  حجز الموعد وإرسال التأكيد
-                </>
-              )}
+              <FaWhatsapp className="text-xl" />
+              {isSubmitting ? 'جاري الحجز...' : 'تأكيد الحجز'}
             </button>
           </div>
         </div>

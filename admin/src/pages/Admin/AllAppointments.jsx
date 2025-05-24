@@ -158,9 +158,9 @@ useEffect(() => {
   const generateTimeSlots = (startHour, endHour) => {
     const slots = [];
     for (let hour = startHour; hour <= endHour; hour++) {
-      slots.push(`${hour}:00 ${hour < 12 ? 'AM' : 'PM'}`);
+      slots.push(`${hour}:00`);
       if (hour !== endHour) {
-        slots.push(`${hour}:30 ${hour < 12 ? 'AM' : 'PM'}`);
+        slots.push(`${hour}:30`);
       }
     }
     return slots;
@@ -198,7 +198,7 @@ const convertTo12HourFormat = (time) => {
   
   if (!momentTime.isValid()) return "تنسيق وقت خاطئ";
   
-  return momentTime.format('h:mm A');
+  return momentTime.format('h:mm');
 };
 
   const getStatusBadge = (status) => {
@@ -452,100 +452,114 @@ const convertTo12HourFormat = (time) => {
               </table>
             </div>
           </div>
-
-          {/* جدول الأسبوع */}
         </>
       )}
 
-      {/* Booking Details Modal */}
+      {/* Modal for appointment details */}
       {showModal && selectedBooking && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-            <div className="p-6">
-              <h2 className="text-xl font-bold mb-4">تفاصيل الموعد</h2>
-              
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <FaUser className="text-gray-500" />
-                  <span className="font-medium">الاسم:</span>
-                  <span>{selectedBooking.name}</span>
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-bold text-gray-800">تفاصيل الموعد</h3>
+              <button 
+                onClick={handleCloseModal}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <FaTimes />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <FaUser className="text-gray-500" />
+                <div>
+                  <p className="text-sm text-gray-500">اسم العميل</p>
+                  <p className="font-semibold">{selectedBooking.name}</p>
                 </div>
-                
-                <div className="flex items-center gap-2">
-                  <FaPhone className="text-gray-500" />
-                  <span className="font-medium">الهاتف:</span>
-                  <span>{selectedBooking.phone}</span>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <FaCalendarAlt className="text-gray-500" />
-                  <span className="font-medium">الخدمة:</span>
-                  <span>{selectedBooking.service}</span>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <FaCalendarAlt className="text-gray-500" />
-                  <span className="font-medium">التاريخ:</span>
-                  <span>{selectedBooking.date}</span>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <FaClock className="text-gray-500" />
-                  <span className="font-medium">الوقت:</span>
-                  <span>{selectedBooking.time}</span>
-                </div>
-                
-                <div className="pt-2">
-                  <span className="font-medium">حالة الموعد:</span>
-                  <div className="mt-1">{getStatusBadge(selectedBooking.status)}</div>
-                </div>
-                
-                {selectedBooking.confirmedAt && (
-                  <div className="text-sm text-gray-600">
-                    تم التأكيد في: {new Date(selectedBooking.confirmedAt).toLocaleString('ar-SA')}
-                  </div>
-                )}
-                
-                {selectedBooking.cancelledAt && (
-                  <div className="text-sm text-gray-600">
-                    تم الإلغاء في: {new Date(selectedBooking.cancelledAt).toLocaleString('ar-SA')}
-                  </div>
-                )}
               </div>
               
-              <div className="mt-6 flex justify-end gap-2">
-                <button
-                  onClick={() => sendWhatsAppMessageDirect(selectedBooking.phone)}
-                  className="bg-green-500 text-white px-4 py-2 rounded flex items-center gap-2"
-                >
-                  <FaWhatsapp /> مراسلة عبر واتساب
-                </button>
-                {selectedBooking.status !== 'cancelled' && (
-                  <button
-                    onClick={() => cancelAppointment(selectedBooking.id)}
-                    className="bg-red-500 text-white px-4 py-2 rounded flex items-center gap-2"
-                  >
-                    <FaTimes /> إلغاء الحجز
-                  </button>
-                )}
-                <button
-                  onClick={handleCloseModal}
-                  className="bg-gray-200 px-4 py-2 rounded"
-                >
-                  إغلاق
-                </button>
+              <div className="flex items-center gap-2">
+                <FaPhone className="text-gray-500" />
+                <div>
+                  <p className="text-sm text-gray-500">رقم الهاتف</p>
+                  <p className="font-semibold">{selectedBooking.phone}</p>
+                </div>
               </div>
+              
+              <div className="flex items-center gap-2">
+                <FaCalendarAlt className="text-gray-500" />
+                <div>
+                  <p className="text-sm text-gray-500">التاريخ</p>
+                  <p className="font-semibold">{selectedBooking.date}</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <FaClock className="text-gray-500" />
+                <div>
+                  <p className="text-sm text-gray-500">الوقت</p>
+                  <p className="font-semibold">{selectedBooking.time}</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <FaBusinessTime className="text-gray-500" />
+                <div>
+                  <p className="text-sm text-gray-500">الخدمة</p>
+                  <p className="font-semibold">{selectedBooking.service}</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <div className="text-gray-500">
+                  {selectedBooking.status === "confirmed" ? <FaCheckCircle /> : 
+                   selectedBooking.status === "pending" ? <FaClock /> : <FaTimes />}
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">الحالة</p>
+                  <p className="font-semibold">
+                    {selectedBooking.status === "confirmed" ? "مؤكدة" : 
+                     selectedBooking.status === "pending" ? "بانتظار التأكيد" : 
+                     selectedBooking.status === "rescheduled" ? "إعادة جدولة" : "ملغية"}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex gap-2">
+              <button
+                onClick={() => sendWhatsAppMessageDirect(selectedBooking.phone)}
+                className="flex-1 bg-green-500 text-white py-2 px-4 rounded flex items-center justify-center gap-2"
+              >
+                <FaWhatsapp /> تواصل عبر واتساب
+              </button>
+              
+              {selectedBooking.status !== "cancelled" && (
+                <button
+                  onClick={() => cancelAppointment(selectedBooking.id)}
+                  className="flex-1 bg-red-500 text-white py-2 px-4 rounded flex items-center justify-center gap-2"
+                >
+                  <FaTimes /> إلغاء الموعد
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
-      <ScheduleSettingsModal
-        show={showScheduleSettings}
-        onClose={() => setShowScheduleSettings(false)}
-        initialSettings={scheduleSettings}
-        onSave={saveScheduleSettings}
-      />
 
+      {/* Schedule Settings Modal */}
+      {showScheduleSettings && (
+        <ScheduleSettingsModal
+          settings={tempSettings}
+          onClose={() => setShowScheduleSettings(false)}
+          onSave={saveScheduleSettings}
+          onWorkingDayToggle={handleWorkingDayToggle}
+          onAddHoliday={addHoliday}
+          onRemoveHoliday={removeHoliday}
+          newHoliday={newHoliday}
+          onNewHolidayChange={setNewHoliday}
+        />
+      )}
     </div>
   );
 };
