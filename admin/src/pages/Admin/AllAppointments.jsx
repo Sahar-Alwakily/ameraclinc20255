@@ -550,6 +550,8 @@ const convertTo12HourFormat = (time) => {
       {/* Schedule Settings Modal */}
       {showScheduleSettings && (
         <ScheduleSettingsModal
+          show={showScheduleSettings}
+          initialSettings={tempSettings}
           settings={tempSettings}
           onClose={() => setShowScheduleSettings(false)}
           onSave={saveScheduleSettings}
