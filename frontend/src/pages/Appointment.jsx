@@ -108,7 +108,7 @@ const generateAvailableTimes = useCallback((settings, date) => {
   
   const times = [];
   // توليد كل ساعة كاملة من البداية للنهاية
-  for (let hour = startHour; hour < endHour; hour++) {
+  for (let hour = startHour; hour <= endHour; hour++) {
     const period = hour < 12 ? 'صباحًا' : 'مساءً';
     const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
     
@@ -431,16 +431,31 @@ const checkTimeAvailability = async (date, time) => {
     });
 
 if (timeUntilAppointment > 0) {
-  const threeHours = 3 * 60 * 60 * 1000; // 3 ساعات بالمللي ثانية
-  let reminderDelay = timeUntilAppointment - threeHours;
+  // تعريف الثوابت بالمللي ثانية
+  const twentyFourHours = 24 * 60 * 60 * 1000;
+  const tenHours = 10 * 60 * 60 * 1000;
+  const fourHours = 4 * 60 * 60 * 1000;
+  
+  let reminderOffset; // الفترة الزمنية قبل الموعد للإرسال
 
-  // منع الجدولة إذا كان الوقت المتبقي أقل من 3 ساعات
-  if (reminderDelay < 0) {
+  // تحديد وقت الإرسال حسب القرب من الموعد
+  if (timeUntilAppointment > twentyFourHours) {
+    // إذا كان الموعد بعد أكثر من 24 ساعة
+    reminderOffset = twentyFourHours; // أرسل قبل 24 ساعة
+  } else if (timeUntilAppointment > tenHours) {
+    // إذا كان الموعد خلال 10-24 ساعة
+    reminderOffset = tenHours; // أرسل قبل 10 ساعات
+  } else if (timeUntilAppointment > fourHours) {
+    // إذا كان الموعد خلال 4-10 ساعات
+    reminderOffset = fourHours; // أرسل قبل 4 ساعات
+  } else {
+    // إذا كان الموعد خلال أقل من 4 ساعات
     console.log('الموعد قريب جدًا، لا يتم إرسال تذكير');
     return;
   }
 
-  const sendAt = new Date(appointmentMoment.valueOf() - threeHours).toISOString();
+  // حساب وقت الإرسال الفعلي
+  const sendAt = new Date(appointmentMoment.valueOf() - reminderOffset).toISOString();
 
   try {
     const response = await fetch(`${apiUrl}/api/schedule-reminder`, {

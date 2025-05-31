@@ -80,10 +80,10 @@ const Navbar = () => {
                     flex items-center justify-between 
                     rounded-2xl 
                     backdrop-blur-xl 
-                    ${scrolled ? 'bg-gradient-to-r from-pink-500/10 to-purple-600/10 shadow-lg' : 'bg-gradient-to-r from-pink-500/15 to-purple-600/15'} 
-                    dark:bg-gray-900/80 
+                    ${scrolled ? 'bg-white/90 shadow-lg' : 'bg-white/80'} 
+                    dark:bg-white-900/80 
                     px-6 py-3
-                    border border-pink-500/20
+                    border border-gray-200
                     transition-all duration-300
                 `}>
                     <motion.img 
@@ -107,9 +107,9 @@ const Navbar = () => {
                                     to={link.to}
                                     className={({ isActive }) => `
                                         relative flex items-center gap-1 px-3 py-2 
-                                        ${isActive ? 'text-pink-500' : 'text-gray-700 dark:text-gray-200'} 
+                                        ${isActive ? 'text-pink-500' : 'text-gray-700 dark:text-black-200'} 
                                         ${link.special ? 
-                                            'bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl shadow-lg shadow-pink-500/30 hover:shadow-pink-500/50 hover:scale-105' :
+                                            'bg-gradient-to-r from-pink-500 to-white-600 text-black rounded-xl shadow-lg shadow-pink-500/30 hover:shadow-pink-500/50 hover:scale-105' :
                                             'hover:text-pink-500 transition-all'
                                         }
                                     `}
@@ -138,14 +138,14 @@ const Navbar = () => {
                             className='relative cursor-pointer transition-all'
                             onClick={() => setShowCart(!showCart)}
                         >
-                            <div className="p-2 rounded-full bg-gradient-to-r from-pink-100 to-purple-100 dark:from-pink-900/30 dark:to-purple-900/30">
+                            <div className="p-2 rounded-full bg-gradient-to-r from-pink-100 to-white-100 dark:from-pink-900/30 dark:to-white-900/30">
                                 <img src={assets.cart} className='w-6 h-6' alt="Cart" />
                             </div>
                             {cartItems.length > 0 && (
                                 <motion.div 
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
-                                    className='absolute -top-2 -right-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full shadow-lg'
+                                    className='absolute -top-2 -right-2 bg-gradient-to-r from-pink-500 to-text-600 text-black text-xs w-5 h-5 flex items-center justify-center rounded-full shadow-lg'
                                 >
                                     {cartItems.reduce((total, item) => total + item.quantity, 0)}
                                 </motion.div>
@@ -155,7 +155,7 @@ const Navbar = () => {
                         <motion.div
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
-                            className="md:hidden p-2 rounded-full bg-gradient-to-r from-pink-100 to-purple-100 dark:from-pink-900/30 dark:to-purple-900/30"
+                            className="md:hidden p-2 rounded-full bg-gradient-to-r from-pink-100 to-white-100 dark:from-pink-900/30 dark:to-white-900/30"
                             onClick={() => setShowMenu(true)}
                         >
                             <img 
@@ -176,7 +176,7 @@ const Navbar = () => {
                         animate={{ x: 0, opacity: 1 }}
                         exit={{ x: '100%', opacity: 0 }}
                         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                        className='fixed top-0 right-0 w-full sm:w-80 h-full bg-gradient-to-br from-pink-50 to-purple-50 dark:from-gray-900/90 dark:to-purple-900/90 backdrop-blur-xl shadow-2xl p-6 z-50 flex flex-col gap-6 items-center text-lg font-medium'
+                        className='fixed top-0 right-0 w-full sm:w-80 h-full bg-white/95 backdrop-blur-xl shadow-2xl p-6 z-50 flex flex-col gap-6 items-center text-lg font-medium'
                     >
                         <div className="w-full flex justify-end">
                             <motion.div
@@ -211,7 +211,7 @@ const Navbar = () => {
                                         className={({ isActive }) => `
                                             flex items-center justify-center gap-2 py-3 px-4 rounded-xl w-full
                                             ${isActive ? 
-                                                'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30' : 
+                                                'bg-gradient-to-r from-pink-500 to-white-600 text-black shadow-lg shadow-pink-500/30' : 
                                                 'bg-white/50 dark:bg-gray-800/50 text-gray-700 dark:text-gray-200'
                                             }
                                         `}
@@ -233,10 +233,10 @@ const Navbar = () => {
                         animate={{ x: 0, opacity: 1 }}
                         exit={{ x: '100%', opacity: 0 }}
                         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                        className='fixed top-0 right-0 w-full sm:w-96 h-full bg-gradient-to-br from-pink-50 to-purple-50 dark:from-gray-900/90 dark:to-purple-900/90 backdrop-blur-xl shadow-2xl z-50 p-6'
+                        className='fixed top-0 right-0 w-full sm:w-96 h-full bg-white/95 backdrop-blur-xl shadow-2xl z-50 p-6'
                     >
                         <div className='flex justify-between items-center mb-6'>
-                            <h2 className='text-xl font-bold bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent'>سلة التسوق</h2>
+                            <h2 className='text-xl font-bold bg-gradient-to-r from-pink-500 to-white-600 bg-clip-text text-transparent'>سلة التسوق</h2>
                             <motion.div
                                 whileHover={{ scale: 1.1, rotate: 90 }}
                                 whileTap={{ scale: 0.9 }}
@@ -267,7 +267,7 @@ const Navbar = () => {
                                         <div className='flex justify-between items-start mb-2'>
                                             <div className='flex-1'>
                                                 <h3 className='text-sm font-medium text-gray-800 dark:text-gray-200'>{item.name}</h3>
-                                                <p className='font-bold bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent'>{item.price} {currencySymbol}</p>
+                                                <p className='font-bold bg-gradient-to-r from-pink-500 to-white-600 bg-clip-text text-transparent'>{item.price} {currencySymbol}</p>
                                             </div>
                                             <motion.button 
                                                 whileHover={{ scale: 1.1 }}
@@ -325,7 +325,7 @@ const Navbar = () => {
                                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mb-4">
                                     <div className="flex justify-between items-center">
                                         <span className="font-medium dark:text-white">الإجمالي:</span>
-                                        <span className="font-bold bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent text-lg">
+                                        <span className="font-bold bg-gradient-to-r from-pink-500 to-white-600 bg-clip-text text-transparent text-lg">
                                             {cartItems.reduce((total, item) => total + (item.price * item.quantity), 0)} {currencySymbol}
                                         </span>
                                     </div>
@@ -333,7 +333,7 @@ const Navbar = () => {
                                 <motion.button 
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
-                                    className='w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white py-3 rounded-xl shadow-lg shadow-pink-500/30 hover:shadow-pink-500/50 font-medium transition-all'
+                                    className='w-full bg-gradient-to-r from-pink-500 to-white-600 text-black py-3 rounded-xl shadow-lg shadow-pink-500/30 hover:shadow-pink-500/50 font-medium transition-all'
                                     onClick={() => {
                                         navigate('/checkout');
                                         setShowCart(false);
