@@ -28,7 +28,7 @@ const Sidebar = () => {
     <>
       {/* زر القائمة للجوال (في اليمين) */}
       <button
-        className="md:hidden fixed top-4 right-4 z-50 p-2 rounded-lg shadow-lg"
+        className="md:hidden fixed top-4 right-4 z-10 p-2 rounded-lg shadow-lg"
         onClick={toggleSidebar}
         aria-label="تبديل القائمة"
       >
@@ -42,7 +42,7 @@ const Sidebar = () => {
       {/* طبقة التغطية للجوال */}
       {isOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-10"
           onClick={toggleSidebar}
         />
       )}
@@ -50,7 +50,7 @@ const Sidebar = () => {
       {/* محتوى الـ Sidebar (يظهر من اليمين) */}
       <div
   dir="rtl"
-  className={`fixed md:static inset-y-0 right-0 w-64 bg-white border-l z-40 transition-all duration-300 ease-in-out ${
+  className={`fixed md:static inset-y-0 right-0 w-64 bg-white border-l z-10 transition-all duration-300 ease-in-out ${
     isOpen ? 'translate-x-0 mt-16' : 'translate-x-full md:translate-x-0' // إضافة mt-16 ليتناسب مع ارتفاع الـ Navbar
   }`}
 >

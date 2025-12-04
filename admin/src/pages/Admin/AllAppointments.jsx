@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { FaFilter, FaCheckCircle, FaClock, FaCalendarAlt, FaUser, FaPhone, FaWhatsapp, FaTimes, FaBusinessTime, FaCalendarDay, FaSave, FaTrash } from "react-icons/fa";
+import { FaFilter, FaCheckCircle, FaClock, FaCalendarAlt, FaUser, FaPhone, FaWhatsapp, FaTimes, FaBusinessTime, FaCalendarDay, FaSave, FaTrash, FaCalendarCheck } from "react-icons/fa";
 import { toast } from 'react-toastify';
 import { database } from '../../APIFirebase/Apidata';
 import { ref, get, update, set, remove } from 'firebase/database';
 import { registerLocale } from "react-datepicker";
 import ar from 'date-fns/locale/ar';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import ScheduleSettingsModal from './ScheduleSettingsModal';
 registerLocale('ar', ar);
 import moment from 'moment-timezone';
@@ -37,6 +39,29 @@ const AllAppointments = () => {
     workingDays: [0, 1, 2, 3, 4, 5, 6]
   });
   const [newHoliday, setNewHoliday] = useState(null);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [rescheduleData, setRescheduleData] = useState({
+    date: null,
+    time: "",
+    availableSlots: []
+  });
+
+  // إضافة هذه الدالة لتحديث tempSettings
+  const updateTempSettings = (newSettings) => {
+    setTempSettings({
+      startHour: newSettings.startHour || 9,
+      endHour: newSettings.endHour || 15,
+      holidays: newSettings.holidays || [],
+      workingDays: newSettings.workingDays || [0, 1, 2, 3, 4, 5, 6]
+    });
+    
+    // تحديث timeSlots مباشرة
+    const slots = generateTimeSlots(newSettings.startHour || 9, newSettings.endHour || 15);
+    setTimeSlots(slots);
+    
+    // تحديث scheduleSettings
+    setScheduleSettings(newSettings);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -85,7 +110,9 @@ const AllAppointments = () => {
                 timestamp: bookingDate.valueOf(),
                 rawTime: booking.time,
                 isToday: bookingDate.isSame(now, 'day'), // تحديد إذا كان الموعد اليوم
-                isFuture: bookingDate.isAfter(now) // تحديد إذا كان الموعد في المستقبل
+                isFuture: bookingDate.isAfter(now), // تحديد إذا كان الموعد في المستقبل
+                originalDate: booking.date,
+                originalTime: booking.time
               };
             })
             .filter(booking => booking.isToday || booking.isFuture) // تصفية المواعيد الماضية
@@ -156,9 +183,9 @@ const AllAppointments = () => {
   const generateTimeSlots = (startHour, endHour) => {
     const slots = [];
     for (let hour = startHour; hour <= endHour; hour++) {
-      slots.push(`${hour}:00`);
+      slots.push(`${hour.toString().padStart(2, '0')}:00`);
       if (hour !== endHour) {
-        slots.push(`${hour}:30`);
+        slots.push(`${hour.toString().padStart(2, '0')}:30`);
       }
     }
     return slots;
@@ -195,7 +222,23 @@ const AllAppointments = () => {
     
     if (!momentTime.isValid()) return "تنسيق وقت خاطئ";
     
-    return momentTime.format('h:mm');
+    return momentTime.format('h:mm A');
+  };
+
+  const convertTo24HourFormat = (time12h) => {
+    if (!time12h) return "00:00";
+    const [time, modifier] = time12h.split(' ');
+    let [hours, minutes] = time.split(':');
+    
+    if (hours === '12') {
+      hours = '00';
+    }
+    
+    if (modifier === 'PM') {
+      hours = parseInt(hours, 10) + 12;
+    }
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes}:00`;
   };
 
   const getStatusBadge = (status) => {
@@ -209,9 +252,12 @@ const AllAppointments = () => {
           <FaClock /> بانتظار التأكيد
         </span>;
       case "rescheduled":
+        return <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs flex items-center gap-1">
+          <FaCalendarCheck /> إعادة جدولة
+        </span>;
       case "cancelled":
         return <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs flex items-center gap-1">
-          <FaTimes /> {status === "rescheduled" ? "إعادة جدولة" : "ملغية"}
+          <FaTimes /> ملغية
         </span>;
       default:
         return <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs">غير معروف</span>;
@@ -256,9 +302,11 @@ const AllAppointments = () => {
 
   const saveScheduleSettings = async (newSettings) => {
     try {
-      await set(ref(database, "scheduleSettings"), newSettings);
-      setScheduleSettings(newSettings);
-      toast.success("تم حفظ إعدادات الجدول بنجاح");
+      // تحديث tempSettings مباشرة مع البيانات الجديدة
+      updateTempSettings(newSettings);
+      
+      // عرض رسالة نجاح
+      toast.success("تم حفظ إعدادات الجدول بنجاح وتحديث الصفحة");
       setShowScheduleSettings(false);
     } catch (error) {
       toast.error("حدث خطأ أثناء حفظ الإعدادات: " + error.message);
@@ -357,6 +405,119 @@ const AllAppointments = () => {
     window.open(whatsappUrl, '_blank');
   };
 
+  const openRescheduleModal = async (booking) => {
+    setSelectedBooking(booking);
+    
+    // توليد الأوقات المتاحة لهذا اليوم باستخدام tempSettings المحدثة
+    const availableSlots = generateTimeSlots(tempSettings.startHour || 9, tempSettings.endHour || 15);
+    
+    setRescheduleData({
+      date: new Date(),
+      time: "",
+      availableSlots: availableSlots
+    });
+    
+    setShowRescheduleModal(true);
+    setShowModal(false);
+  };
+
+  const handleRescheduleDateChange = (date) => {
+    const availableSlots = generateTimeSlots(tempSettings.startHour || 9, tempSettings.endHour || 15);
+    setRescheduleData(prev => ({
+      ...prev,
+      date: date,
+      time: "",
+      availableSlots: availableSlots
+    }));
+  };
+
+  const handleReschedule = async () => {
+    try {
+      if (!rescheduleData.date || !rescheduleData.time) {
+        toast.error("يرجى اختيار التاريخ والوقت");
+        return;
+      }
+
+      if (!selectedBooking) {
+        toast.error("لم يتم اختيار موعد");
+        return;
+      }
+
+      // تحويل التاريخ إلى تنسيق YYYY-MM-DD
+      const formattedDate = moment(rescheduleData.date).format('YYYY-MM-DD');
+      
+      // تحويل الوقت إلى تنسيق 24 ساعة
+      const time24 = convertTo24HourFormat(rescheduleData.time);
+      
+      // تحديث البيانات في Firebase
+      await update(ref(database, `appointments/${selectedBooking.id}`), {
+        date: formattedDate,
+        time: time24,
+        status: 'rescheduled',
+        rescheduledAt: new Date().toISOString(),
+        previousDate: selectedBooking.originalDate,
+        previousTime: selectedBooking.originalTime
+      });
+
+      // إرسال رسالة واتساب للعميل
+      try {
+        await sendWhatsAppMessage(selectedBooking.phone.replace('+972', ''), 'reschedule_template', {
+          customerName: selectedBooking.name,
+          oldDate: moment(selectedBooking.originalDate).format('DD/MM/YYYY'),
+          oldTime: selectedBooking.time,
+          newDate: moment(formattedDate).format('DD/MM/YYYY'),
+          newTime: rescheduleData.time
+        });
+      } catch (whatsappError) {
+        console.error('Failed to send WhatsApp message:', whatsappError);
+        toast.warning('تم إعادة الجدولة ولكن لم يتم إرسال رسالة التأكيد');
+      }
+
+      // تحديث الواجهة
+      const updatedBookings = bookings.map(b => 
+        b.id === selectedBooking.id ? {
+          ...b,
+          date: `${formattedDate} (${moment(formattedDate).format('dddd')})`,
+          time: rescheduleData.time,
+          status: 'rescheduled',
+          originalDate: formattedDate,
+          originalTime: time24
+        } : b
+      );
+      
+      setBookings(updatedBookings);
+      setFilteredBookings(updatedBookings.filter(b => 
+        statusFilter === 'all' || b.status === statusFilter
+      ));
+
+      setShowRescheduleModal(false);
+      toast.success('تم إعادة جدولة الموعد بنجاح');
+    } catch (error) {
+      console.error('Error rescheduling appointment:', error);
+      toast.error('حدث خطأ أثناء إعادة الجدولة');
+    }
+  };
+
+  const isDateDisabled = (date) => {
+    const dayOfWeek = date.getDay();
+    const dateStr = moment(date).format('YYYY-MM-DD');
+    
+    // التحقق إذا كان اليوم إجازة
+    if (tempSettings.holidays && tempSettings.holidays.includes(dateStr)) {
+      return true;
+    }
+    
+    // التحقق إذا كان اليوم ضمن أيام العمل
+    if (tempSettings.workingDays && !tempSettings.workingDays.includes(dayOfWeek)) {
+      return true;
+    }
+    
+    // منع اختيار تاريخ قديم
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date < today;
+  };
+
   return (
     <div className="container mx-auto p-4 bg-white min-h-screen" dir="rtl">
       <div className="mb-6">
@@ -405,6 +566,7 @@ const AllAppointments = () => {
                   className={`p-4 rounded-lg border ${
                     booking.status === "confirmed" ? "bg-green-50 border-green-200" :
                     booking.status === "pending" ? "bg-yellow-50 border-yellow-200" :
+                    booking.status === "rescheduled" ? "bg-blue-50 border-blue-200" :
                     "bg-red-50 border-red-200"
                   }`}
                 >
@@ -429,7 +591,7 @@ const AllAppointments = () => {
                       <span>{booking.phone}</span>
                     </div>
                   </div>
-                  <div className="mt-2 flex justify-end">
+                  <div className="mt-2 flex justify-end gap-2">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -485,7 +647,7 @@ const AllAppointments = () => {
                               deleteAppointment(booking.id);
                             }
                           }}
-                          className="text-red-600 hover:text-red-800 p-1"
+                          className="text-red-600 hover:text-red-800 p-1 mr-2"
                           title="حذف نهائي"
                         >
                           <FaTrash />
@@ -558,7 +720,8 @@ const AllAppointments = () => {
               <div className="flex items-center gap-2">
                 <div className="text-gray-500">
                   {selectedBooking.status === "confirmed" ? <FaCheckCircle /> : 
-                   selectedBooking.status === "pending" ? <FaClock /> : <FaTimes />}
+                   selectedBooking.status === "pending" ? <FaClock /> : 
+                   selectedBooking.status === "rescheduled" ? <FaCalendarCheck /> : <FaTimes />}
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">الحالة</p>
@@ -580,6 +743,17 @@ const AllAppointments = () => {
                   <FaWhatsapp /> تواصل عبر واتساب
                 </button>
                 
+                {selectedBooking.status !== "cancelled" && selectedBooking.status !== "rescheduled" && (
+                  <button
+                    onClick={() => openRescheduleModal(selectedBooking)}
+                    className="flex-1 bg-blue-500 text-white py-2 px-4 rounded flex items-center justify-center gap-2"
+                  >
+                    <FaCalendarCheck /> إعادة جدولة
+                  </button>
+                )}
+              </div>
+              
+              <div className="flex gap-2">
                 {selectedBooking.status !== "cancelled" && (
                   <button
                     onClick={() => cancelAppointment(selectedBooking.id)}
@@ -588,15 +762,109 @@ const AllAppointments = () => {
                     <FaTimes /> إلغاء الموعد
                   </button>
                 )}
+                
+                {/* زر الحذف النهائي */}
+                <button
+                  onClick={() => deleteAppointment(selectedBooking.id)}
+                  className="flex-1 bg-gray-800 text-white py-2 px-4 rounded flex items-center justify-center gap-2 hover:bg-gray-900 transition-colors"
+                >
+                  <FaTrash /> حذف نهائي
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for Rescheduling */}
+      {showRescheduleModal && selectedBooking && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <div className="flex justify-between items-start mb-6">
+              <h3 className="text-xl font-bold text-gray-800">إعادة جدولة الموعد</h3>
+              <button 
+                onClick={() => {
+                  setShowRescheduleModal(false);
+                  setShowModal(true);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <FaTimes />
+              </button>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-blue-800 mb-2">الموعد الحالي:</h4>
+                <p className="text-gray-700">
+                  {selectedBooking.name} - {selectedBooking.service}
+                </p>
+                <p className="text-gray-700">
+                  التاريخ: {selectedBooking.date}
+                </p>
+                <p className="text-gray-700">
+                  الوقت: {selectedBooking.time}
+                </p>
               </div>
               
-              {/* زر الحذف النهائي */}
-              <button
-                onClick={() => deleteAppointment(selectedBooking.id)}
-                className="w-full bg-gray-800 text-white py-2 px-4 rounded flex items-center justify-center gap-2 hover:bg-gray-900 transition-colors"
-              >
-                <FaTrash /> حذف الموعد نهائيًا
-              </button>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    اختر التاريخ الجديد
+                  </label>
+                  <DatePicker
+                    selected={rescheduleData.date}
+                    onChange={handleRescheduleDateChange}
+                    dateFormat="yyyy-MM-dd"
+                    minDate={new Date()}
+                    filterDate={isDateDisabled}
+                    className="w-full p-3 border border-gray-300 rounded-lg text-center"
+                    locale={ar}
+                    placeholderText="اختر التاريخ"
+                    showMonthDropdown
+                    showYearDropdown
+                    dropdownMode="select"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    اختر الوقت الجديد
+                  </label>
+                  <select
+                    value={rescheduleData.time}
+                    onChange={(e) => setRescheduleData(prev => ({...prev, time: e.target.value}))}
+                    className="w-full p-3 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">اختر الوقت</option>
+                    {rescheduleData.availableSlots.map((slot, index) => (
+                      <option key={index} value={slot}>
+                        {convertTo12HourFormat(slot)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              <div className="mt-8 flex gap-2">
+                <button
+                  onClick={handleReschedule}
+                  className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"
+                  disabled={!rescheduleData.date || !rescheduleData.time}
+                >
+                  <FaCalendarCheck /> تأكيد إعادة الجدولة
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setShowRescheduleModal(false);
+                    setShowModal(true);
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-800 py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  إلغاء
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -607,14 +875,8 @@ const AllAppointments = () => {
         <ScheduleSettingsModal
           show={showScheduleSettings}
           initialSettings={tempSettings}
-          settings={tempSettings}
           onClose={() => setShowScheduleSettings(false)}
           onSave={saveScheduleSettings}
-          onWorkingDayToggle={handleWorkingDayToggle}
-          onAddHoliday={addHoliday}
-          onRemoveHoliday={removeHoliday}
-          newHoliday={newHoliday}
-          onNewHolidayChange={setNewHoliday}
         />
       )}
     </div>
