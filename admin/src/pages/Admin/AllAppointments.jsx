@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { FaFilter, FaCheckCircle, FaClock, FaCalendarAlt, FaUser, FaPhone, FaWhatsapp, FaTimes, FaBusinessTime, FaCalendarDay, FaSave } from "react-icons/fa";
+import { FaFilter, FaCheckCircle, FaClock, FaCalendarAlt, FaUser, FaPhone, FaWhatsapp, FaTimes, FaBusinessTime, FaCalendarDay, FaSave, FaTrash } from "react-icons/fa";
 import { toast } from 'react-toastify';
 import { database } from '../../APIFirebase/Apidata';
-import { ref, get,update, set } from 'firebase/database';
+import { ref, get, update, set, remove } from 'firebase/database';
 import { registerLocale } from "react-datepicker";
 import ar from 'date-fns/locale/ar';
 import ScheduleSettingsModal from './ScheduleSettingsModal';
@@ -10,6 +10,7 @@ registerLocale('ar', ar);
 import moment from 'moment-timezone';
 import 'moment/locale/ar';
 moment.locale('ar');
+
 const statusOptions = [
   { value: "all", label: "جميع الحالات" },
   { value: "pending", label: "بانتظار التأكيد" },
@@ -37,78 +38,78 @@ const AllAppointments = () => {
   });
   const [newHoliday, setNewHoliday] = useState(null);
 
-  
-useEffect(() => {
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      
-      // جلب إعدادات الجدول
-      const settingsSnapshot = await get(ref(database, 'scheduleSettings'));
-      if (settingsSnapshot.exists()) {
-        const settings = settingsSnapshot.val();
-        setScheduleSettings(settings);
-        setTempSettings({
-          startHour: settings.startHour || 9,
-          endHour: settings.endHour || 15,
-          holidays: settings.holidays || [],
-          workingDays: settings.workingDays || [0, 1, 2, 3, 4, 5, 6]
-        });
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
         
-        const slots = generateTimeSlots(settings.startHour || 9, settings.endHour || 15);
-        setTimeSlots(slots);
-      }
-
-      // جلب الحجوزات
-      const appointmentsSnapshot = await get(ref(database, 'appointments'));
-      if (appointmentsSnapshot.exists()) {
-        const now = moment(); // الوقت الحالي
-        
-        const bookingsData = Object.entries(appointmentsSnapshot.val())
-          .map(([id, booking]) => {
-            const isValidDate = moment(booking.date).isValid();
-            const bookingDate = moment(booking.date);
-            
-            // إضافة اسم اليوم بالعربية
-            const dateWithDay = isValidDate ? 
-              `${bookingDate.format('YYYY-MM-DD')} (${bookingDate.format('dddd')})` : 
-              'تاريخ غير صالح';
-            
-            return {
-              id,
-              name: booking.customerName,
-              phone: `+972${booking.phoneNumber}`,
-              date: dateWithDay,
-              time: convertTo12HourFormat(booking.time),
-              service: booking.service,
-              status: booking.status || "pending",
-              timestamp: bookingDate.valueOf(),
-              rawTime: booking.time,
-              isToday: bookingDate.isSame(now, 'day'), // تحديد إذا كان الموعد اليوم
-              isFuture: bookingDate.isAfter(now) // تحديد إذا كان الموعد في المستقبل
-            };
-          })
-          .filter(booking => booking.isToday || booking.isFuture) // تصفية المواعيد الماضية
-          .sort((a, b) => {
-            // الترتيب: اليوم أولاً، ثم المستقبل حسب التاريخ
-            if (a.isToday && !b.isToday) return -1;
-            if (!a.isToday && b.isToday) return 1;
-            return a.timestamp - b.timestamp;
+        // جلب إعدادات الجدول
+        const settingsSnapshot = await get(ref(database, 'scheduleSettings'));
+        if (settingsSnapshot.exists()) {
+          const settings = settingsSnapshot.val();
+          setScheduleSettings(settings);
+          setTempSettings({
+            startHour: settings.startHour || 9,
+            endHour: settings.endHour || 15,
+            holidays: settings.holidays || [],
+            workingDays: settings.workingDays || [0, 1, 2, 3, 4, 5, 6]
           });
-        
-        setBookings(bookingsData);
-        setFilteredBookings(bookingsData);
-      }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      toast.error("حدث خطأ أثناء جلب البيانات");
-    } finally {
-      setLoading(false);
-    }
-  };
+          
+          const slots = generateTimeSlots(settings.startHour || 9, settings.endHour || 15);
+          setTimeSlots(slots);
+        }
 
-  fetchData();
-}, []);
+        // جلب الحجوزات
+        const appointmentsSnapshot = await get(ref(database, 'appointments'));
+        if (appointmentsSnapshot.exists()) {
+          const now = moment(); // الوقت الحالي
+          
+          const bookingsData = Object.entries(appointmentsSnapshot.val())
+            .map(([id, booking]) => {
+              const isValidDate = moment(booking.date).isValid();
+              const bookingDate = moment(booking.date);
+              
+              // إضافة اسم اليوم بالعربية
+              const dateWithDay = isValidDate ? 
+                `${bookingDate.format('YYYY-MM-DD')} (${bookingDate.format('dddd')})` : 
+                'تاريخ غير صالح';
+              
+              return {
+                id,
+                name: booking.customerName,
+                phone: `+972${booking.phoneNumber}`,
+                date: dateWithDay,
+                time: convertTo12HourFormat(booking.time),
+                service: booking.service,
+                status: booking.status || "pending",
+                timestamp: bookingDate.valueOf(),
+                rawTime: booking.time,
+                isToday: bookingDate.isSame(now, 'day'), // تحديد إذا كان الموعد اليوم
+                isFuture: bookingDate.isAfter(now) // تحديد إذا كان الموعد في المستقبل
+              };
+            })
+            .filter(booking => booking.isToday || booking.isFuture) // تصفية المواعيد الماضية
+            .sort((a, b) => {
+              // الترتيب: اليوم أولاً، ثم المستقبل حسب التاريخ
+              if (a.isToday && !b.isToday) return -1;
+              if (!a.isToday && b.isToday) return 1;
+              return a.timestamp - b.timestamp;
+            });
+          
+          setBookings(bookingsData);
+          setFilteredBookings(bookingsData);
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        toast.error("حدث خطأ أثناء جلب البيانات");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
   useEffect(() => {
     if (statusFilter === "all") {
       setFilteredBookings(bookings);
@@ -125,11 +126,9 @@ useEffect(() => {
 
   const sendWhatsAppMessage = async (phone, templateId, variables) => {
     try {
-
-  const apiUrl = import.meta.env.PROD 
-  ? 'https://www.api.ameraclinic.com' 
-  : 'http://localhost:5000';
-      // Use environment variable for API base URL
+      const apiUrl = import.meta.env.PROD 
+      ? 'https://www.api.ameraclinic.com' 
+      : 'http://localhost:5000';
       
       const response = await fetch(`${apiUrl}/api/send-whatsapp`, {
         method: 'POST',
@@ -153,7 +152,6 @@ useEffect(() => {
       throw new Error(error.message || 'فشل الاتصال بالخادم');
     }
   };
-  
 
   const generateTimeSlots = (startHour, endHour) => {
     const slots = [];
@@ -166,40 +164,39 @@ useEffect(() => {
     return slots;
   };
 
-const generateWeekDays = () => {
-  const today = moment(); // استخدام moment
-  const days = [];
-  
-  for (let i = 0; i < 7; i++) {
-    const date = today.clone().add(i, 'days'); // استخدام clone() و add()
+  const generateWeekDays = () => {
+    const today = moment();
+    const days = [];
     
-    days.push({
-      date: date.format('YYYY-MM-DD'), // استخدام format() بدلًا من toISOString()
-      day: date.format('dddd'), // الحصول على اسم اليوم بالعربية
-      shortDay: date.format('ddd'), // اسم اليوم المختصر
-      isToday: i === 0,
-      dayNumber: date.date() // الحصول على رقم اليوم
-    });
-  }
-  
-  setWeekDays(days);
-};
+    for (let i = 0; i < 7; i++) {
+      const date = today.clone().add(i, 'days');
+      
+      days.push({
+        date: date.format('YYYY-MM-DD'),
+        day: date.format('dddd'),
+        shortDay: date.format('ddd'),
+        isToday: i === 0,
+        dayNumber: date.date()
+      });
+    }
+    
+    setWeekDays(days);
+  };
 
-const convertTo12HourFormat = (time) => {
-  if (!time) return "وقت غير معروف";
-  
-  // معالجة التنسيقات العربية
-  const normalizedTime = time
-    .replace('صباحًا', 'AM')
-    .replace('مساءً', 'PM')
-    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+  const convertTo12HourFormat = (time) => {
+    if (!time) return "وقت غير معروف";
+    
+    const normalizedTime = time
+      .replace('صباحًا', 'AM')
+      .replace('مساءً', 'PM')
+      .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 
-  const momentTime = moment(normalizedTime, 'HH:mm:ss');
-  
-  if (!momentTime.isValid()) return "تنسيق وقت خاطئ";
-  
-  return momentTime.format('h:mm');
-};
+    const momentTime = moment(normalizedTime, 'HH:mm:ss');
+    
+    if (!momentTime.isValid()) return "تنسيق وقت خاطئ";
+    
+    return momentTime.format('h:mm');
+  };
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -294,11 +291,10 @@ const convertTo12HourFormat = (time) => {
       // 4. Send cancellation message
       try {
         await sendWhatsAppMessage(customerPhone, 'HX37fbfdda164c92d277bf0199e988367c', {
-          selectedDate:new Date(appointmentData.date).toLocaleDateString('ar-EG'),
+          selectedDate: new Date(appointmentData.date).toLocaleDateString('ar-EG'),
         });
       } catch (whatsappError) {
         console.error('Failed to send WhatsApp message:', whatsappError);
-        // Continue with cancellation even if WhatsApp fails
         toast.warning('تم إلغاء الحجز ولكن لم يتم إرسال رسالة التأكيد');
       }
   
@@ -323,7 +319,29 @@ const convertTo12HourFormat = (time) => {
     }
   };
 
-  
+  const deleteAppointment = async (appointmentId) => {
+    try {
+      if (!window.confirm("هل أنت متأكد من حذف هذا الموعد نهائيًا؟")) {
+        return;
+      }
+
+      // حذف الموعد من Firebase
+      await remove(ref(database, `appointments/${appointmentId}`));
+      
+      // تحديث الواجهة
+      const updatedBookings = bookings.filter(b => b.id !== appointmentId);
+      setBookings(updatedBookings);
+      setFilteredBookings(updatedBookings.filter(b => 
+        statusFilter === 'all' || b.status === statusFilter
+      ));
+
+      setShowModal(false);
+      toast.success('تم حذف الموعد بنجاح');
+    } catch (error) {
+      console.error('Error deleting appointment:', error);
+      toast.error('حدث خطأ أثناء حذف الموعد');
+    }
+  };
 
   const handleBookingClick = (booking) => {
     setSelectedBooking(booking);
@@ -338,7 +356,6 @@ const convertTo12HourFormat = (time) => {
     const whatsappUrl = `https://wa.me/${phone.replace('+', '')}`;
     window.open(whatsappUrl, '_blank');
   };
-
 
   return (
     <div className="container mx-auto p-4 bg-white min-h-screen" dir="rtl">
@@ -412,6 +429,20 @@ const convertTo12HourFormat = (time) => {
                       <span>{booking.phone}</span>
                     </div>
                   </div>
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm("هل تريد حذف هذا الموعد نهائيًا؟")) {
+                          deleteAppointment(booking.id);
+                        }
+                      }}
+                      className="text-red-600 hover:text-red-800 p-2"
+                      title="حذف نهائي"
+                    >
+                      <FaTrash />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -430,11 +461,11 @@ const convertTo12HourFormat = (time) => {
                     <th className="py-3 px-4 border text-right">الوقت</th>
                     <th className="py-3 px-4 border text-right">الحالة</th>
                     <th className="py-3 px-4 border text-right">الهاتف</th>
+                    <th className="py-3 px-4 border text-right">الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredBookings.map(booking => (
-                    
                     <tr 
                       key={booking.id} 
                       className="hover:bg-gray-50 cursor-pointer"
@@ -446,6 +477,20 @@ const convertTo12HourFormat = (time) => {
                       <td className="py-3 px-4 border">{booking.time}</td>
                       <td className="py-3 px-4 border">{getStatusBadge(booking.status)}</td>
                       <td className="py-3 px-4 border">{booking.phone}</td>
+                      <td className="py-3 px-4 border">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm("هل تريد حذف هذا الموعد نهائيًا؟")) {
+                              deleteAppointment(booking.id);
+                            }
+                          }}
+                          className="text-red-600 hover:text-red-800 p-1"
+                          title="حذف نهائي"
+                        >
+                          <FaTrash />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -526,22 +571,32 @@ const convertTo12HourFormat = (time) => {
               </div>
             </div>
             
-            <div className="mt-6 flex gap-2">
-              <button
-                onClick={() => sendWhatsAppMessageDirect(selectedBooking.phone)}
-                className="flex-1 bg-green-500 text-white py-2 px-4 rounded flex items-center justify-center gap-2"
-              >
-                <FaWhatsapp /> تواصل عبر واتساب
-              </button>
-              
-              {selectedBooking.status !== "cancelled" && (
+            <div className="mt-6 flex flex-col gap-2">
+              <div className="flex gap-2">
                 <button
-                  onClick={() => cancelAppointment(selectedBooking.id)}
-                  className="flex-1 bg-red-500 text-white py-2 px-4 rounded flex items-center justify-center gap-2"
+                  onClick={() => sendWhatsAppMessageDirect(selectedBooking.phone)}
+                  className="flex-1 bg-green-500 text-white py-2 px-4 rounded flex items-center justify-center gap-2"
                 >
-                  <FaTimes /> إلغاء الموعد
+                  <FaWhatsapp /> تواصل عبر واتساب
                 </button>
-              )}
+                
+                {selectedBooking.status !== "cancelled" && (
+                  <button
+                    onClick={() => cancelAppointment(selectedBooking.id)}
+                    className="flex-1 bg-red-500 text-white py-2 px-4 rounded flex items-center justify-center gap-2"
+                  >
+                    <FaTimes /> إلغاء الموعد
+                  </button>
+                )}
+              </div>
+              
+              {/* زر الحذف النهائي */}
+              <button
+                onClick={() => deleteAppointment(selectedBooking.id)}
+                className="w-full bg-gray-800 text-white py-2 px-4 rounded flex items-center justify-center gap-2 hover:bg-gray-900 transition-colors"
+              >
+                <FaTrash /> حذف الموعد نهائيًا
+              </button>
             </div>
           </div>
         </div>
