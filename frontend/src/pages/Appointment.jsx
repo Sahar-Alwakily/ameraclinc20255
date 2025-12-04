@@ -1,7 +1,4 @@
-/****************************************************************************************
- *  Appointment.jsx  –  حجز موعد
- *  يقرأ الأوقات من day_X_start/end فقط، لايوجد قيم افتراضية
- ****************************************************************************************/
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import Calendar from 'react-calendar';
@@ -12,7 +9,7 @@ import { ref, push, set, get, onValue } from 'firebase/database';
 import moment from 'moment-timezone';
 
 const Appointment = () => {
-  const [selectedArea, setSelectedArea] = useState(''); // 'shqeib' | 'rahat'
+  const [selectedArea, setSelectedArea] = useState('');          // 'shqeib' | 'rahat'
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState('');
   const [selectedService, setSelectedService] = useState('');
@@ -26,96 +23,131 @@ const Appointment = () => {
   const [availableTimes, setAvailableTimes] = useState([]);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  useEffect(() => { const t = setInterval(() => setCurrentTime(new Date()), 60000); return () => clearInterval(t); }, []);
-
+  // تحديث الوقت الحالي كل دقيقة
   useEffect(() => {
-    window.scrollTo(0,0);
+    const t = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  // جلب البيانات الأولية
+  useEffect(() => {
+    window.scrollTo(0, 0);
     const fetchData = async () => {
       try {
-        // استماع لإعدادات الجدول
-        onValue(ref(database, 'scheduleSettings'), s => setScheduleSettings(s.exists() ? s.val() : {}));
+        // إعدادات الجدول
+        onValue(ref(database, 'scheduleSettings'), s =>
+          setScheduleSettings(s.exists() ? s.val() : {})
+        );
+
         // الخدمات
         const svc = await get(ref(database, 'services'));
         if (svc.exists()) {
-          const list = Object.entries(svc.val()).map(([id, s]) => ({id, title: s.title}));
+          const list = Object.entries(svc.val()).map(([id, s]) => ({ id, title: s.title }));
           setServices(list);
           const url = new URLSearchParams(window.location.search);
           const sel = list.find(i => i.id === url.get('service'));
           if (sel) setSelectedService(sel.title);
         }
-        // الحجوزات
-        onValue(ref(database, 'appointments'), s => setBookedAppointments(s.exists() ? s.val() : {}));
-      } catch (e) { console.error(e); toast.error('حدث خطأ أثناء جلب البيانات'); } finally { setLoadingServices(false); }
+
+        // المواعيد المحجوزة
+        onValue(ref(database, 'appointments'), s =>
+          setBookedAppointments(s.exists() ? s.val() : {})
+        );
+      } catch (e) {
+        console.error(e);
+        toast.error('حدث خطأ أثناء جلب البيانات');
+      } finally {
+        setLoadingServices(false);
+      }
     };
     fetchData();
   }, []);
 
   /* ----------------------------------------------------------
-     توليد الأوقات من day_X_start / day_X_end فقط
+     فلترة الخدمات حسب المنطقة واليوم
+  ---------------------------------------------------------- */
+  const getFilteredServices = useCallback(() => {
+    if (!selectedDate) return [];
+    const day = selectedDate.getDay(); // 0=أحد ... 3=أربعاء
+
+    if (selectedArea === 'shqeib') return day === 2 ? services : [];
+    if (selectedArea === 'rahat') {
+      if (day === 3) return services.filter(s => s.title.includes('وريدي'));          // أربعاء فقط وريدي
+      if (day !== 2) return services.filter(s => !s.title.includes('وريدي'));        // باقي الأيام بدون وريدي
+    }
+    return [];
+  }, [selectedDate, selectedArea, services]);
+
+  /* ----------------------------------------------------------
+     توليد الأوقات:
+     - الأربعاء + رهط → كل 10 دقائق
+     - باقي الحالات → كل 30 دقيقة
   ---------------------------------------------------------- */
   const generateAvailableTimes = useCallback(date => {
-  if (!date || !scheduleSettings || !selectedArea) {
-    setAvailableTimes([]);
-    return;
-  }
-
-  const day = date.getDay();
-
-  if (selectedArea === 'shqeib' && day !== 2) {
-    setAvailableTimes([]);
-    return;
-  }
-
-  if (selectedArea === 'rahat') {
-    const isWorkingDay = Array.isArray(scheduleSettings.workingDays) &&
-                         scheduleSettings.workingDays.includes(day);
-    const isExcludedDay = day === 2;
-
-    if (!isWorkingDay || isExcludedDay) {
+    if (!date || !scheduleSettings || !selectedArea) {
       setAvailableTimes([]);
       return;
     }
-  }
 
-  const start = scheduleSettings[`day_${day}_start`];
-  const end = scheduleSettings[`day_${day}_end`];
+    const day = date.getDay();
 
-  if (typeof start !== 'number' || typeof end !== 'number' || start >= end) {
-    setAvailableTimes([]);
-    return;
-  }
+    // شقيب السلام → الثلاثاء فقط
+    if (selectedArea === 'shqeib' && day !== 2) {
+      setAvailableTimes([]);
+      return;
+    }
 
-  const times = [];
+    // رهط → ضمن workingDays فقط + استبعاد الثلاثاء
+    if (selectedArea === 'rahat') {
+      const isWorkingDay = Array.isArray(scheduleSettings.workingDays) &&
+                           scheduleSettings.workingDays.includes(day);
+      const isExcludedDay = day === 2; // الثلاثاء
 
-  if (selectedArea === 'rahat' && day === 3) {
-    // الأربعاء + رهط → كل 10 دقائق
-    for (let h = start; h < end; h++) {
-      const period = h < 12 ? 'صباحًا' : 'مساءً';
-      const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
-      for (let m = 0; m < 60; m += 10) {
-        times.push(`${displayHour}:${m.toString().padStart(2, '0')} ${period}`);
+      if (!isWorkingDay || isExcludedDay) {
+        setAvailableTimes([]);
+        return;
       }
     }
-    // إضافة الساعة الأخيرة (مثلاً 04:00 مساءً)
-    const periodEnd = end < 12 ? 'صباحًا' : 'مساءً';
-    const displayHourEnd = end === 0 ? 12 : end > 12 ? end - 12 : end;
-    times.push(`${displayHourEnd}:00 ${periodEnd}`);
-  } else {
-    // باقي الأيام → كل 30 دقيقة
-    for (let h = start; h < end; h++) {
-      const periodStart = h < 12 ? 'صباحًا' : 'مساءً';
-      const displayHourStart = h === 0 ? 12 : h > 12 ? h - 12 : h;
 
-      times.push(`${displayHourStart}:00 ${periodStart}`);
-      times.push(`${displayHourStart}:30 ${periodStart}`);
+    // قراءة أوقات البداية والنهاية
+    const start = scheduleSettings[`day_${day}_start`];
+    const end   = scheduleSettings[`day_${day}_end`];
+
+    if (typeof start !== 'number' || typeof end !== 'number' || start >= end) {
+      setAvailableTimes([]);
+      return;
     }
-    const periodEnd = end < 12 ? 'صباحًا' : 'مساءً';
-    const displayHourEnd = end === 0 ? 12 : end > 12 ? end - 12 : end;
-    times.push(`${displayHourEnd}:00 ${periodEnd}`);
-  }
 
-  setAvailableTimes(times);
-}, [scheduleSettings, selectedArea]);
+    const times = [];
+
+    // الأربعاء + رهط → كل 10 دقائق
+    if (selectedArea === 'rahat' && day === 3) {
+      for (let h = start; h < end; h++) {
+        const period = h < 12 ? 'صباحًا' : 'مساءً';
+        const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+        for (let m = 0; m < 60; m += 10) {
+          times.push(`${displayHour}:${m.toString().padStart(2, '0')} ${period}`);
+        }
+      }
+      const periodEnd = end < 12 ? 'صباحًا' : 'مساءً';
+      const displayHourEnd = end === 0 ? 12 : end > 12 ? end - 12 : end;
+      times.push(`${displayHourEnd}:00 ${periodEnd}`);
+    } else {
+      // باقي الأيام → كل 30 دقيقة
+      for (let h = start; h < end; h++) {
+        const periodStart = h < 12 ? 'صباحًا' : 'مساءً';
+        const displayHourStart = h === 0 ? 12 : h > 12 ? h - 12 : h;
+
+        times.push(`${displayHourStart}:00 ${periodStart}`);
+        times.push(`${displayHourStart}:30 ${periodStart}`);
+      }
+      const periodEnd = end < 12 ? 'صباحًا' : 'مساءً';
+      const displayHourEnd = end === 0 ? 12 : end > 12 ? end - 12 : end;
+      times.push(`${displayHourEnd}:00 ${periodEnd}`);
+    }
+
+    setAvailableTimes(times);
+  }, [scheduleSettings, selectedArea]);
 
   /* ----------------------------------------------------------
      باقي المنطق (بدون تعديل جوهري)
@@ -168,35 +200,8 @@ const Appointment = () => {
     [selectedDate, bookedAppointments, selectedArea]
   );
 
-useEffect(() => {
-  if (selectedDate && selectedArea) generateAvailableTimes(selectedDate);
-}, [selectedDate, selectedArea, generateAvailableTimes]);
-
-  /* ----------------------------------------------------------
-     فلترة الخدمات حسب المنطقة واليوم
-  ---------------------------------------------------------- */
-const getFilteredServices = useCallback(() => {
-  if (!selectedDate) return [];
-
-  const day = selectedDate.getDay(); // 0 = الأحد، 3 = الأربعاء
-
-  if (selectedArea === 'shqeib') {
-    return day === 2 ? services : []; // فقط الثلاثاء
-  }
-
-  if (selectedArea === 'rahat') {
-    if (day === 3) {
-      // أربعاء → فقط خدمات الوريدي
-      return services.filter(s => s.title.includes('وريدي'));
-    }
-    if (day !== 2) {
-      // أي يوم آخر ما عدا ثلاثاء → خدمات بدون وريدي
-      return services.filter(s => !s.title.includes('وريدي'));
-    }
-  }
-
-  return [];
-}, [selectedDate, selectedArea, services]);
+  useEffect(() => { if (selectedDate && selectedArea) generateAvailableTimes(selectedDate); },
+           [selectedDate, selectedArea, generateAvailableTimes]);
 
   /* ---------- Handlers ---------- */
   const handleDateChange = date => { if (!date || isNaN(date.getTime())) return; setSelectedDate(date); setSelectedTime(''); generateAvailableTimes(date); };
@@ -228,10 +233,45 @@ const getFilteredServices = useCallback(() => {
     return `${String(h).padStart(2,'0')}:${String(m||0).padStart(2,'0')}:00`;
   };
 
-  /* ---------- إرسال الحجز ---------- */
+  /* ---------- إرسال الحجز مع واتساب إجباري ---------- */
+  const sendWhatsAppMessage = async (phone, templateId, variables) => {
+    try {
+      if (!phone || phone.length < 9) throw new Error('رقم الهاتف غير صالح');
+      if (!phone.match(/^5[0-9]{8,}$/)) throw new Error('الرجاء إدخال رقم هاتف صحيح يبدأ بـ 5');
+
+      const apiUrl = import.meta.env.PROD
+        ? 'https://www.api.ameraclinic.com'
+        : 'http://localhost:5000';
+
+      const response = await fetch(`${apiUrl}/api/send-whatsapp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, templateId, variables }),
+        timeout: 15000
+      });
+
+      const responseData = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        let errorMessage = 'فشل إرسال الرسالة';
+        if (response.status === 400) errorMessage = 'رقم الهاتف غير صحيح أو غير مسجل في واتساب';
+        else if (response.status === 429) errorMessage = 'تم إرسال الكثير من الرسائل، يرجى المحاولة لاحقاً';
+        else if (responseData.error) errorMessage = responseData.error.message || responseData.error;
+        throw new Error(errorMessage);
+      }
+      if (!responseData.success && !responseData.messageId) {
+        throw new Error('لم يتم إرسال الرسالة، يرجى التحقق من الرقم');
+      }
+      return responseData;
+    } catch (error) {
+      console.error('Error sending WhatsApp:', error);
+      throw new Error(`فشل إرسال واتساب: ${error.message}. تأكد من أن الرقم ${phone} مسجل في واتساب`);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!selectedArea || !selectedDate || !selectedTime || !selectedService || !customerName || !phoneNumber) {
-      toast.warning('الرجاء تعبئة جميع الحقول!'); return;
+      toast.warning('الرجاء تعبئة جميع الحقول!');
+      return;
     }
     try {
       const isPM = selectedTime.includes('مساءً');
@@ -248,19 +288,49 @@ const getFilteredServices = useCallback(() => {
         setIsSubmitting(false); return;
       }
 
+      // إرسال واتساب أولاً
+      const whatsappResult = await sendWhatsAppMessage(cleanPhone, 'HX277d8bcb856090aa17ce4c441dc8f103', {
+        customerName,
+        selectedDate: formatArabicDate(selectedDate),
+        selectedTime,
+        area: selectedArea === 'shqeib' ? 'شقيب السلام' : 'رهط'
+      });
+
+      // حفظ الحجز بعد نجاح الواتساب
       const appointmentsRef = ref(database, 'appointments');
       const newRef = push(appointmentsRef);
       await set(newRef, {
-        customerName, phoneNumber: cleanPhone, service: selectedService,
-        date: appMoment.toISOString(), time: selectedTime, area: selectedArea,
-        createdAt: new Date().toISOString(), status: 'pending', timezone: 'Asia/Jerusalem'
+        customerName,
+        phoneNumber: cleanPhone,
+        service: selectedService,
+        date: appMoment.toISOString(),
+        time: selectedTime,
+        area: selectedArea,
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+        timezone: 'Asia/Jerusalem',
+        whatsappSent: true,
+        whatsappMessageId: whatsappResult.messageId
       });
 
-      toast.success('✅ تم الحجز بنجاح!');
+      toast.success('✅ تم الحجز بنجاح وتم إرسال تأكيد إلى واتساب!');
       setSelectedArea(''); setSelectedDate(null); setSelectedTime(''); setSelectedService('');
       setCustomerName(''); setPhoneNumber('');
     } catch (e) {
-      console.error(e); toast.error('فشل الحجز: ' + e.message);
+      console.error(e);
+      toast.error(
+        <div>
+          <div className="font-bold mb-2">⚠️ لم يتم الحجز!</div>
+          <div className="text-sm text-right">
+            <div>الرجاء التأكد من:</div>
+            <div>1️⃣ أن رقم الهاتف مسجل في واتساب</div>
+            <div>2️⃣ الرقم يبدأ بـ 05xxxxxxxx</div>
+            <div>3️⃣ اتصال الإنترنت قوي</div>
+            <div className="mt-2 text-red-600">❌ بدون إرسال واتساب لا يمكن إتمام الحجز</div>
+          </div>
+        </div>,
+        { autoClose: 10000, closeOnClick: false, pauseOnHover: true }
+      );
     } finally {
       setIsSubmitting(false);
     }
