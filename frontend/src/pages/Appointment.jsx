@@ -292,103 +292,150 @@ const Appointment = () => {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
   };
 
-  const sendWhatsAppMessage = async (phone, templateId, variables) => {
-    try {
-      const response = await fetch(`${apiUrl}/api/send-whatsapp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phone: `${phone.replace(/\D/g, '').replace(/^0/, '')}`,
-          templateId,
-          variables
-        })
-      });
-  
-      if (!response.ok) throw new Error('فشل إرسال الرسالة');
-      return await response.json();
-    } catch (error) {
-      console.error('Error sending WhatsApp:', error);
-      throw error;
+const sendWhatsAppMessage = async (phone, templateId, variables) => {
+  try {
+    // التحقق المكثف من رقم الهاتف
+    if (!phone || phone.length < 9) {
+      throw new Error('رقم الهاتف غير صالح');
     }
-  };
+
+    // التحقق من تنسيق الرقم السعودي/الإسرائيلي
+    if (!phone.match(/^5[0-9]{8,}$/)) {
+      throw new Error('الرجاء إدخال رقم هاتف صحيح يبدأ بـ 5');
+    }
+
+    const response = await fetch(`${apiUrl}/api/send-whatsapp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        phone: phone,
+        templateId,
+        variables
+      }),
+      timeout: 15000 // زيادة المهلة إلى 15 ثانية
+    });
+
+    const responseData = await response.json().catch(() => ({}));
+    
+    if (!response.ok) {
+      // تحليل رسالة الخطأ
+      let errorMessage = 'فشل إرسال الرسالة';
+      
+      if (response.status === 400) {
+        errorMessage = 'رقم الهاتف غير صحيح أو غير مسجل في واتساب';
+      } else if (response.status === 429) {
+        errorMessage = 'تم إرسال الكثير من الرسائل، يرجى المحاولة لاحقاً';
+      } else if (responseData.error) {
+        errorMessage = responseData.error.message || responseData.error;
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    // التحقق من أن الرسالة أرسلت بالفعل
+    if (!responseData.success && !responseData.messageId) {
+      throw new Error('لم يتم إرسال الرسالة، يرجى التحقق من الرقم');
+    }
+    
+    return responseData;
+  } catch (error) {
+    console.error('Error sending WhatsApp:', error);
+    
+    // رسالة خطأ موحدة
+    throw new Error(`فشل إرسال واتساب: ${error.message}. تأكد من أن الرقم ${phone} مسجل في واتساب`);
+  }
+};
 
   const handleServiceChange = (event) => {
     setSelectedService(event.target.value);
   };
 
-  const handleSubmit = async () => {
-    if (!selectedArea || !selectedDate || !selectedTime || !selectedService || !customerName || !phoneNumber) {
-      toast.warning('الرجاء تعبئة جميع الحقول!');
+const handleSubmit = async () => {
+  if (!selectedArea || !selectedDate || !selectedTime || !selectedService || !customerName || !phoneNumber) {
+    toast.warning('الرجاء تعبئة جميع الحقول!');
+    return;
+  }
+
+  try {
+    const isPM = selectedTime.includes('مساءً');
+    const timeComponents = selectedTime.replace('صباحًا', '').replace('مساءً', '').trim().split(':');
+    let hours = parseInt(timeComponents[0], 10);
+    const minutes = parseInt(timeComponents[1] || '0', 10);
+    
+    if (isPM && hours !== 12) {
+      hours += 12;
+    } else if (!isPM && hours === 12) {
+      hours = 0;
+    }
+
+    const appointmentMoment = moment(selectedDate)
+      .set({ hour: hours, minute: minutes })
+      .tz('Asia/Jerusalem', true);
+
+    if (!appointmentMoment.isValid() || isNaN(appointmentMoment.toDate().getTime())) {
+      toast.error('الوقت المحدد غير صحيح');
       return;
     }
 
+    const now = moment().tz('Asia/Jerusalem');
+    const timeUntilAppointment = appointmentMoment.valueOf() - now.valueOf();
+
+    if (timeUntilAppointment < 0) {
+      toast.error('لا يمكن الحجز في أوقات ماضية');
+      return;
+    }
+
+    if (isTimeBooked(selectedTime)) {
+      toast.error('هذا الوقت محجوز بالفعل، يرجى اختيار وقت آخر');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    // التحقق من صحة رقم الهاتف
+    const cleanPhoneNumber = phoneNumber.replace(/\D/g, '').replace(/^0/, '');
+    if (cleanPhoneNumber.length < 9 || !cleanPhoneNumber.startsWith('5')) {
+      toast.error('الرجاء إدخال رقم هاتف صحيح يبدأ بـ 05xxxxxxxx');
+      setIsSubmitting(false);
+      return;
+    }
+
+    // محاولة إرسال رسالة الواتساب أولاً
     try {
-      const isPM = selectedTime.includes('مساءً');
-      const timeComponents = selectedTime.replace('صباحًا', '').replace('مساءً', '').trim().split(':');
-      let hours = parseInt(timeComponents[0], 10);
-      const minutes = parseInt(timeComponents[1] || '0', 10);
-      
-      if (isPM && hours !== 12) {
-        hours += 12;
-      } else if (!isPM && hours === 12) {
-        hours = 0;
-      }
-
-      const appointmentMoment = moment(selectedDate)
-        .set({ hour: hours, minute: minutes })
-        .tz('Asia/Jerusalem', true);
-
-      if (!appointmentMoment.isValid() || isNaN(appointmentMoment.toDate().getTime())) {
-        toast.error('الوقت المحدد غير صحيح');
-        return;
-      }
-
-      const now = moment().tz('Asia/Jerusalem');
-      const timeUntilAppointment = appointmentMoment.valueOf() - now.valueOf();
-
-      if (timeUntilAppointment < 0) {
-        toast.error('لا يمكن الحجز في أوقات ماضية');
-        return;
-      }
-
-      if (isTimeBooked(selectedTime)) {
-        toast.error('هذا الوقت محجوز بالفعل، يرجى اختيار وقت آخر');
-        return;
-      }
-
-      setIsSubmitting(true);
-
-      // حفظ البيانات في Firebase
-      const appointmentsRef = ref(database, 'appointments');
-      const newAppointmentRef = push(appointmentsRef);
-      
-      const appointmentData = {
-        customerName,
-        phoneNumber: phoneNumber.replace(/\D/g, '').replace(/^0/, ''),
-        service: selectedService,
-        date: appointmentMoment.toISOString(),
-        time: selectedTime,
-        area: selectedArea, // إضافة المنطقة
-        createdAt: new Date().toISOString(),
-        status: 'pending',
-        timezone: 'Asia/Jerusalem'
-      };
-
-      await set(newAppointmentRef, appointmentData);
-
-      // إرسال رسالة التأكيد
-      await sendWhatsAppMessage(phoneNumber, 'HX277d8bcb856090aa17ce4c441dc8f103', {
+      // إرسال رسالة اختبارية أولاً للتأكد من صحة الرقم
+      const whatsappResult = await sendWhatsAppMessage(cleanPhoneNumber, 'HX277d8bcb856090aa17ce4c441dc8f103', {
         customerName,
         selectedDate: formatArabicDate(selectedDate),
         selectedTime,
         area: selectedArea === 'shqeib' ? 'شقيب السلام' : 'رهط'
       });
 
-      // باقي كود التذكيرات...
+      // إذا نجح إرسال الواتساب، نحفظ الموعد في Firebase
+      const appointmentsRef = ref(database, 'appointments');
+      const newAppointmentRef = push(appointmentsRef);
+      
+      const appointmentData = {
+        customerName,
+        phoneNumber: cleanPhoneNumber,
+        service: selectedService,
+        date: appointmentMoment.toISOString(),
+        time: selectedTime,
+        area: selectedArea,
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+        timezone: 'Asia/Jerusalem',
+        whatsappSent: true, // إضافة علامة أن الرسالة أرسلت
+        whatsappMessageId: whatsappResult.messageId // حفظ معرف الرسالة إن وجد
+      };
 
-      toast.success('تم الحجز بنجاح! سيصلك تأكيد على واتساب');
+      // حفظ الموعد في Firebase بعد نجاح إرسال الواتساب
+      await set(newAppointmentRef, appointmentData);
+      
+      toast.success('✅ تم الحجز بنجاح! تم إرسال تأكيد إلى واتساب');
+
+      // إعادة تعيين الحقول
       setSelectedArea('');
       setSelectedDate(null);
       setSelectedTime('');
@@ -396,13 +443,42 @@ const Appointment = () => {
       setCustomerName('');
       setPhoneNumber('');
 
-    } catch (error) {
-      console.error('Error:', error);
-      toast.error(error.message || 'حدث خطأ أثناء الحجز');
-    } finally {
-      setIsSubmitting(false);
+    } catch (whatsappError) {
+      console.warn('فشل إرسال واتساب:', whatsappError);
+      
+      // إذا فشل إرسال الواتساب، لا نحفظ الموعد
+      throw new Error('فشل إرسال رسالة التأكيد. الرجاء التأكد من أن رقم الهاتف مسجل في واتساب');
     }
-  };
+
+  } catch (error) {
+    console.error('Error:', error);
+    
+    // عرض رسالة خطأ واضحة
+    if (error.message.includes('واتساب') || error.message.includes('رقم الهاتف')) {
+      toast.error(
+        <div>
+          <div className="font-bold mb-2">⚠️ لم يتم الحجز!</div>
+          <div className="text-sm text-right">
+            <div>الرجاء التأكد من:</div>
+            <div>1️⃣ أن رقم الهاتف مسجل في واتساب</div>
+            <div>2️⃣ الرقم يبدأ بـ 05xxxxxxxx</div>
+            <div>3️⃣ اتصال الإنترنت قوي</div>
+            <div className="mt-2 text-red-600">❌ بدون إرسال واتساب لا يمكن إتمام الحجز</div>
+          </div>
+        </div>,
+        {
+          autoClose: 10000,
+          closeOnClick: false,
+          pauseOnHover: true
+        }
+      );
+    } else {
+      toast.error(error.message || 'حدث خطأ أثناء الحجز');
+    }
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   return (
     <div className="appointment-container bg-gradient-to-br from-pink-50 to-white-50 min-h-screen flex items-center justify-center p-4" dir="rtl">
