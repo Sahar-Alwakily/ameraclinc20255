@@ -268,73 +268,141 @@ const Appointment = () => {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!selectedArea || !selectedDate || !selectedTime || !selectedService || !customerName || !phoneNumber) {
-      toast.warning('الرجاء تعبئة جميع الحقول!');
+const handleSubmit = async () => {
+  if (!selectedArea || !selectedDate || !selectedTime || !selectedService || !customerName || !phoneNumber) {
+    toast.warning('الرجاء تعبئة جميع الحقول!');
+    return;
+  }
+
+  try {
+    const isPM = selectedTime.includes('مساءً');
+    const [t, m] = selectedTime.replace(/صباحًا|مساءً/g, '').trim().split(':').map(Number);
+    let h = t; if (isPM && h !== 12) h += 12; if (!isPM && h === 12) h = 0;
+    const appMoment = moment(selectedDate).set({ h, m }).tz('Asia/Jerusalem', true);
+
+    if (!appMoment.isValid()) {
+      toast.error('الوقت المحدد غير صحيح');
       return;
     }
-    try {
-      const isPM = selectedTime.includes('مساءً');
-      const [t, m] = selectedTime.replace(/صباحًا|مساءً/g, '').trim().split(':').map(Number);
-      let h = t; if (isPM && h !== 12) h += 12; if (!isPM && h === 12) h = 0;
-      const appMoment = moment(selectedDate).set({h, m}).tz('Asia/Jerusalem', true);
-      if (!appMoment.isValid()) { toast.error('الوقت المحدد غير صحيح'); return; }
-      if (isTimeBooked(selectedTime)) { toast.error('الوقت محجوز بالفعل'); return; }
 
-      setIsSubmitting(true);
-      const cleanPhone = phoneNumber.replace(/\D/g, '').replace(/^0/, '');
-      if (cleanPhone.length < 9 || !cleanPhone.startsWith('5')) {
-        toast.error('أدخل رقمًا صحيحًا يبدأ بـ 05xxxxxxxx');
-        setIsSubmitting(false); return;
+    const now = moment().tz('Asia/Jerusalem');
+    const timeUntilAppointment = appMoment.valueOf() - now.valueOf();
+
+    if (timeUntilAppointment < 0) {
+      toast.error('لا يمكن الحجز في أوقات ماضية');
+      return;
+    }
+
+    if (isTimeBooked(selectedTime)) {
+      toast.error('الوقت محجوز بالفعل');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const cleanPhone = phoneNumber.replace(/\D/g, '').replace(/^0/, '');
+    if (cleanPhone.length < 9 || !cleanPhone.startsWith('5')) {
+      toast.error('أدخل رقمًا صحيحًا يبدأ بـ 05xxxxxxxx');
+      setIsSubmitting(false);
+      return;
+    }
+
+    // ✅ إرسال واتساب أولاً
+    await sendWhatsAppMessage(cleanPhone, 'HX277d8bcb856090aa17ce4c441dc8f103', {
+      customerName,
+      selectedDate: formatArabicDate(selectedDate),
+      selectedTime,
+      area: selectedArea === 'shqeib' ? 'شقيب السلام' : 'رهط'
+    });
+
+    // ✅ حفظ الحجز بعد نجاح الواتساب
+    const appointmentsRef = ref(database, 'appointments');
+    const newRef = push(appointmentsRef);
+    await set(newRef, {
+      customerName,
+      phoneNumber: cleanPhone,
+      service: selectedService,
+      date: appMoment.toISOString(),
+      time: selectedTime,
+      area: selectedArea,
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+      timezone: 'Asia/Jerusalem',
+      whatsappSent: true,
+      whatsappMessageId: null
+    });
+
+    // ✅ جدولة التذكير حسب قرب الموعد
+    if (timeUntilAppointment > 0) {
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      const tenHours = 10 * 60 * 60 * 1000;
+      const fourHours = 4 * 60 * 60 * 1000;
+
+      let reminderOffset;
+      if (timeUntilAppointment > twentyFourHours) {
+        reminderOffset = twentyFourHours; // قبل 24 ساعة
+      } else if (timeUntilAppointment > tenHours) {
+        reminderOffset = tenHours; // قبل 10 ساعات
+      } else if (timeUntilAppointment > fourHours) {
+        reminderOffset = fourHours; // قبل 4 ساعات
+      } else {
+        console.log('الموعد قريب جدًا، لا يتم إرسال تذكير');
+        return;
       }
 
-      // إرسال واتساب أولاً
-      const whatsappResult = await sendWhatsAppMessage(cleanPhone, 'HX277d8bcb856090aa17ce4c441dc8f103', {
-        customerName,
-        selectedDate: formatArabicDate(selectedDate),
-        selectedTime,
-        area: selectedArea === 'shqeib' ? 'شقيب السلام' : 'رهط'
-      });
+      const sendAt = new Date(appMoment.valueOf() - reminderOffset).toISOString();
 
-      // حفظ الحجز بعد نجاح الواتساب
-      const appointmentsRef = ref(database, 'appointments');
-      const newRef = push(appointmentsRef);
-      await set(newRef, {
-        customerName,
-        phoneNumber: cleanPhone,
-        service: selectedService,
-        date: appMoment.toISOString(),
-        time: selectedTime,
-        area: selectedArea,
-        createdAt: new Date().toISOString(),
-        status: 'pending',
-        timezone: 'Asia/Jerusalem',
-        whatsappSent: true,
-        whatsappMessageId: whatsappResult.messageId
-      });
+      try {
+        const apiUrl = import.meta.env.PROD
+          ? 'https://www.api.ameraclinic.com'
+          : 'http://localhost:5000';
 
-      toast.success('✅ تم الحجز بنجاح وتم إرسال تأكيد إلى واتساب!');
-      setSelectedArea(''); setSelectedDate(null); setSelectedTime(''); setSelectedService('');
-      setCustomerName(''); setPhoneNumber('');
-    } catch (e) {
-      console.error(e);
-      toast.error(
-        <div>
-          <div className="font-bold mb-2">⚠️ لم يتم الحجز!</div>
-          <div className="text-sm text-right">
-            <div>الرجاء التأكد من:</div>
-            <div>1️⃣ أن رقم الهاتف مسجل في واتساب</div>
-            <div>2️⃣ الرقم يبدأ بـ 05xxxxxxxx</div>
-            <div>3️⃣ اتصال الإنترنت قوي</div>
-            <div className="mt-2 text-red-600">❌ بدون إرسال واتساب لا يمكن إتمام الحجز</div>
-          </div>
-        </div>,
-        { autoClose: 10000, closeOnClick: false, pauseOnHover: true }
-      );
-    } finally {
-      setIsSubmitting(false);
+        await fetch(`${apiUrl}/api/schedule-reminder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: cleanPhone,
+            templateId: 'HX1b073311cb981b06b540940d2462efcb',
+            variables: {
+              customerName,
+              selectedDate: formatArabicDate(selectedDate),
+              selectedTime,
+              remainingTime: reminderOffset === twentyFourHours ? '24 ساعة'
+                : reminderOffset === tenHours ? '10 ساعات'
+                : '4 ساعات'
+            },
+            sendAt
+          }),
+          credentials: 'include'
+        });
+      } catch (reminderError) {
+        console.warn('فشل جدولة التذكير:', reminderError);
+      }
     }
-  };
+
+    toast.success('✅ تم الحجز بنجاح وتم إرسال تأكيد إلى واتساب!');
+    setSelectedArea(''); setSelectedDate(null); setSelectedTime(''); setSelectedService('');
+    setCustomerName(''); setPhoneNumber('');
+
+  } catch (e) {
+    console.error(e);
+    toast.error(
+      <div>
+        <div className="font-bold mb-2">⚠️ لم يتم الحجز!</div>
+        <div className="text-sm text-right">
+          <div>الرجاء التأكد من:</div>
+          <div>1️⃣ أن رقم الهاتف مسجل في واتساب</div>
+          <div>2️⃣ الرقم يبدأ بـ 05xxxxxxxx</div>
+          <div>3️⃣ اتصال الإنترنت قوي</div>
+          <div className="mt-2 text-red-600">❌ بدون إرسال واتساب لا يمكن إتمام الحجز</div>
+        </div>
+      </div>,
+      { autoClose: 10000, closeOnClick: false, pauseOnHover: true }
+    );
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   /* ---------- Render ---------- */
   if (loadingServices) return (
