@@ -11,6 +11,7 @@ const Dashboard = () => {
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [notificationCount, setNotificationCount] = useState(0);
 
     useEffect(() => {
         let isMounted = true;
@@ -39,19 +40,50 @@ const Dashboard = () => {
             setAppointments(formattedAppointments);
             setLoading(false);
 
-            // إشعارات التحديثات - الطريقة المعدلة
+            // إشعارات التحديثات مع زر إغلاق يدوي
             if (formattedAppointments.length > 0 && isMounted) {
                 const latestAppointment = formattedAppointments[formattedAppointments.length - 1];
+                
+                // زيادة عداد الإشعارات
+                setNotificationCount(prev => prev + 1);
+                
+                // إعداد زر الإغلاق المخصص
+                const CloseButton = ({ closeToast }) => (
+                    <button
+                        onClick={closeToast}
+                        className="text-white hover:text-gray-300 text-lg font-bold mr-2"
+                        aria-label="إغلاق"
+                    >
+                        ×
+                    </button>
+                );
+
                 toast(
-                    <div dir="rtl" className="text-right">
-                        <strong>حجز جديد</strong>
-                        <div>{latestAppointment.service} - {latestAppointment.customerName}</div>
+                    <div dir="rtl" className="text-right flex items-start justify-between">
+                        <div>
+                            <strong className="text-white">حجز جديد 🔔</strong>
+                            <div className="text-white mt-1 text-sm">
+                                {latestAppointment.service} - {latestAppointment.customerName}
+                            </div>
+                            <div className="text-white text-xs mt-1">
+                                {latestAppointment.time} | {latestAppointment.date}
+                            </div>
+                        </div>
                     </div>,
                     {
                         position: "top-left",
-                        autoClose: 5000,
+                        autoClose: false, // لا يختفي تلقائياً
                         rtl: true,
-                        theme: "colored"
+                        theme: "colored",
+                        closeButton: CloseButton,
+                        className: "notification-toast",
+                        style: {
+                            backgroundColor: '#4CAF50',
+                            color: 'white',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            marginTop: '10px'
+                        }
                     }
                 );
             }
@@ -63,6 +95,21 @@ const Dashboard = () => {
             unsubscribeAppointments();
         };
     }, []);
+
+    // دالة لمسح جميع الإشعارات
+    const clearAllNotifications = () => {
+        toast.dismiss();
+        setNotificationCount(0);
+    };
+
+    // دالة لتفعيل الإشعارات لفترة محدودة
+    const enableTemporaryNotifications = () => {
+        // تفعيل الإشعارات لمدة 5 دقائق فقط
+        setTimeout(() => {
+            // إغلاق جميع الإشعارات بعد 5 دقائق
+            toast.dismiss();
+        }, 5 * 60 * 1000); // 5 دقائق
+    };
 
     const stats = useMemo(() => {
         const today = new Date().toLocaleDateString('en-US');
@@ -99,40 +146,36 @@ const Dashboard = () => {
         }).reverse();
     }, [orders]);
 
-const filteredAppointments = useMemo(() => {
-    const today = new Date().toLocaleDateString('en-US');
-    const currentTime = new Date();
-    
-    // دالة لتحويل الوقت العربي إلى دقائق منذ منتصف الليل
-    const getTimeValue = (timeStr) => {
-        const [time, period] = timeStr.split(' ');
-        let [hours, minutes] = time.split(':').map(Number);
+    const filteredAppointments = useMemo(() => {
+        const today = new Date().toLocaleDateString('en-US');
+        const currentTime = new Date();
         
-        // التحويل إلى تنسيق 24 ساعة
-        if (period === 'مساءً' && hours !== 12) hours += 12;
-        if (period === 'صباحًا' && hours === 12) hours = 0;
-        
-        return hours * 60 + minutes;
-    };
+        const getTimeValue = (timeStr) => {
+            const [time, period] = timeStr.split(' ');
+            let [hours, minutes] = time.split(':').map(Number);
+            
+            if (period === 'مساءً' && hours !== 12) hours += 12;
+            if (period === 'صباحًا' && hours === 12) hours = 0;
+            
+            return hours * 60 + minutes;
+        };
 
-    return (appointments || [])
-        .filter(app => {
-            const appDate = new Date(app.date);
-            const isToday = app.date === today;
-            
-            // حساب الوقت الحالي بالدقائق
-            const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
-            const appMinutes = getTimeValue(app.time);
-            
-            return isToday && appMinutes >= currentMinutes; // المواعيد المستقبلية فقط
-        })
-        .sort((a, b) => getTimeValue(a.time) - getTimeValue(b.time)) // الترتيب تصاعدي
-        .filter(app => 
-            app.customerName?.includes(searchTerm) || 
-            app.service?.includes(searchTerm) || 
-            app.phoneNumber?.includes(searchTerm)
-        );
-}, [appointments, searchTerm]);
+        return (appointments || [])
+            .filter(app => {
+                const appDate = new Date(app.date);
+                const isToday = app.date === today;
+                const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+                const appMinutes = getTimeValue(app.time);
+                
+                return isToday && appMinutes >= currentMinutes;
+            })
+            .sort((a, b) => getTimeValue(a.time) - getTimeValue(b.time))
+            .filter(app => 
+                app.customerName?.includes(searchTerm) || 
+                app.service?.includes(searchTerm) || 
+                app.phoneNumber?.includes(searchTerm)
+            );
+    }, [appointments, searchTerm]);
 
     if (loading) {
         return (
@@ -143,24 +186,66 @@ const filteredAppointments = useMemo(() => {
     }
 
     return (
-            <div dir="rtl" className="p-4 md:p-6">
+        <div dir="rtl" className="p-4 md:p-6">
+            {/* ToastContainer مخصص */}
+            <ToastContainer
+                position="top-left"
+                autoClose={false}
+                hideProgressBar
+                newestOnTop={false}
+                closeOnClick={false}
+                rtl={true}
+                pauseOnFocusLoss={false}
+                draggable={false}
+                pauseOnHover
+                theme="colored"
+                style={{ width: "350px", top: "70px" }}
+            />
 
-            
-            {/* قسم الحجوزات أولاً */}
+            {/* زر التحكم في الإشعارات */}
+            {notificationCount > 0 && (
+                <div className="mb-4 flex justify-end">
+                    <button
+                        onClick={clearAllNotifications}
+                        className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                    >
+                        <span>إغلاق جميع الإشعارات ({notificationCount})</span>
+                        <span className="text-lg">×</span>
+                    </button>
+                </div>
+            )}
+
+            {/* قسم الحجوزات */}
             <div className="bg-white p-4 md:p-6 rounded-lg shadow mb-6">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-                    <h3 className="text-xl font-semibold flex items-center">
-                        <FaCalendarAlt className="ml-2" /> حجوزات اليوم
-                    </h3>
-                    <div className="relative w-full md:w-64">
-                        <FaSearch className="absolute right-3 top-3 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="ابحث بالاسم أو الخدمة..."
-                            className="w-full pr-10 pl-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-xl font-semibold flex items-center">
+                            <FaCalendarAlt className="ml-2" /> حجوزات اليوم
+                        </h3>
+                        {notificationCount > 0 && (
+                            <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                                {notificationCount}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        <div className="relative w-full md:w-64">
+                            <FaSearch className="absolute right-3 top-3 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="ابحث بالاسم أو الخدمة..."
+                                className="w-full pr-10 pl-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <button
+                            onClick={enableTemporaryNotifications}
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg"
+                            title="تفعيل الإشعارات لمدة 5 دقائق"
+                        >
+                            🔔
+                        </button>
                     </div>
                 </div>
 
@@ -209,7 +294,7 @@ const filteredAppointments = useMemo(() => {
                 )}
             </div>
 
-            {/* بطاقات الإحصائيات */}
+            {/* بقية الكود... */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
                 {[
                     { title: 'إجمالي الطلبات', value: stats.orders.total },

@@ -8,9 +8,9 @@ const Sidebar = () => {
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 768) {
-        setIsOpen(true); // الشريط الجانبي مفتوح دائمًا على الشاشات الأكبر من 768px
+        setIsOpen(true);
       } else {
-        setIsOpen(false); // على الجوال يجب أن يكون مغلقًا
+        setIsOpen(false);
       }
     };
 
@@ -21,40 +21,40 @@ const Sidebar = () => {
   }, []);
 
   const toggleSidebar = () => {
-    setIsOpen(!isOpen); // التبديل بين حالة الفتح والإغلاق
+    setIsOpen(!isOpen);
   };
 
   return (
     <>
       {/* زر القائمة للجوال (في اليمين) */}
       <button
-        className="md:hidden fixed top-4 right-4 z-10 p-2 rounded-lg shadow-lg"
+        className="md:hidden fixed top-4 right-4 z-50 p-2 bg-primary text-white rounded-lg shadow-lg"
         onClick={toggleSidebar}
         aria-label="تبديل القائمة"
       >
-        <img 
-          src={isOpen ? assets.admin_logo : assets.admin_logo} 
-          alt="قائمة" 
-          className="w-6 h-6" 
-        />
+        {/* استخدام أيقونة القائمة (هامبورجر) بدلاً من الشعار */}
+        <div className="flex flex-col justify-center items-center w-6 h-6">
+          <span className={`block h-0.5 w-6 bg-white transition-all duration-300 ${isOpen ? 'rotate-45 translate-y-1.5' : ''}`} />
+          <span className={`block h-0.5 w-6 bg-white my-1 transition-all duration-300 ${isOpen ? 'opacity-0' : ''}`} />
+          <span className={`block h-0.5 w-6 bg-white transition-all duration-300 ${isOpen ? '-rotate-45 -translate-y-1.5' : ''}`} />
+        </div>
       </button>
 
       {/* طبقة التغطية للجوال */}
       {isOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-10"
+          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
           onClick={toggleSidebar}
         />
       )}
 
       {/* محتوى الـ Sidebar (يظهر من اليمين) */}
       <div
-  dir="rtl"
-  className={`fixed md:static inset-y-0 right-0 w-64 bg-white border-l z-10 transition-all duration-300 ease-in-out ${
-    isOpen ? 'translate-x-0 mt-16' : 'translate-x-full md:translate-x-0' // إضافة mt-16 ليتناسب مع ارتفاع الـ Navbar
-  }`}
->
-      
+        dir="rtl"
+        className={`fixed md:static inset-y-0 right-0 w-64 bg-white border-l z-40 transition-transform duration-300 ease-in-out ${
+          isOpen ? 'translate-x-0 mt-16' : 'translate-x-full md:translate-x-0'
+        }`}
+      >
         <div className="flex flex-col h-full">
           {/* قائمة الروابط */}
           <nav className="flex-1 overflow-y-auto">
